@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>球員卡雲端庫存交易管理系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100">
+    <div id="root"></div>
+    
+    <script type="module">
+      import React from "react";
+      import ReactDOM from "react-dom/client";
+      import App from "./app/page.jsx"; // 指向你現有的 page.jsx
+
+      ReactDOM.createRoot(document.getElementById("root")).render(
+        React.createElement(App)
+      );
+    </script>
+  </body>
+</html>
