@@ -2,23 +2,21 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   LayoutDashboard, Package, CreditCard, Plus, Pencil, Trash2,
-  TrendingUp, DollarSign, BarChart3, X, AlertTriangle, CheckCircle2, 
-  Clock, Archive, ShoppingBag, RefreshCw, Boxes, PlusCircle, 
+  TrendingUp, DollarSign, BarChart3, X, AlertTriangle, CheckCircle2,
+  Clock, Archive, ShoppingBag, RefreshCw, Boxes, PlusCircle,
   MinusCircle, Search, Filter, Star, LogIn, LogOut, Lock, Mail, Loader2,
-  Wrench, ShoppingCart, Tag
+  Wrench, ShoppingCart, Tag, ChevronLeft, ChevronRight
 } from "lucide-react";
 
-// ─── 填入你的 SUPABASE 雲端連結資訊 ─────────────────────────────────────────────
+// ─── SUPABASE ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://mwrwkjldppabqerdihcm.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13cndramxkcHBhYnFlcmRpaGNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwODMzODQsImV4cCI6MjA5NDY1OTM4NH0.JGB8aQfkO3GnG_abY3t4CdikwnPK89sHzzcZ28tIvms";
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── uid 工具函式 ────────────────────────────────────────────────────────────
+// ─── uid ─────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-// decimals: 0 = 整數（預設，用於金額大數字）; 1 = 一位小數（用於單位成本）
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n, decimals = 0) => {
   if (n === null || n === undefined || isNaN(n)) return "—";
   return new Intl.NumberFormat("zh-TW", {
@@ -31,13 +29,14 @@ const fmt = (n, decimals = 0) => {
 const fmtPct = (n) => isFinite(n) && !isNaN(n) ? `${n.toFixed(1)}%` : "0.0%";
 
 const STATUS_META = {
-  in_stock:  { label: "已入庫（待售）", color: "bg-sky-900/60 text-sky-300 border-sky-700",       icon: Archive },
-  reserved:  { label: "已保留",          color: "bg-amber-900/60 text-amber-300 border-amber-700", icon: Clock },
-  sold:      { label: "已售出（待發貨）",color: "bg-violet-900/60 text-violet-300 border-violet-700", icon: ShoppingBag },
-  closed:    { label: "已結案",            color: "bg-emerald-900/60 text-emerald-300 border-emerald-700", icon: CheckCircle2 },
+  in_stock: { label: "已入庫（待售）", color: "bg-sky-900/60 text-sky-300 border-sky-700", icon: Archive },
+  reserved: { label: "已保留", color: "bg-amber-900/60 text-amber-300 border-amber-700", icon: Clock },
+  sold:     { label: "已售出（待發貨）", color: "bg-violet-900/60 text-violet-300 border-violet-700", icon: ShoppingBag },
+  closed:   { label: "已結案", color: "bg-emerald-900/60 text-emerald-300 border-emerald-700", icon: CheckCircle2 },
 };
 
 const CHANNELS = ["蝦皮拍賣", "Facebook", "麥當勞面交", "eBay", "Yahoo拍賣", "Line私訊", "其他"];
+const PAGE_SIZE = 15;
 
 const calcPkgCost = (usages, pkgMap) =>
   (usages || []).reduce((s, u) => {
@@ -51,7 +50,7 @@ const calcProfit = (card, pkgMap) => {
   return (card.sell_price ?? 0) - (card.buy_price ?? 0) - pkgCost - (card.platform_fee ?? 0);
 };
 
-// ─── 會員登入/註冊介面組件 ──────────────────────────────────────────────────────
+// ─── AuthView ─────────────────────────────────────────────────────────────────
 function AuthView({ onAuthSuccess }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -64,7 +63,6 @@ function AuthView({ onAuthSuccess }) {
     if (!email || !password) return;
     setLoading(true);
     setMsg({ text: "", isError: false });
-
     try {
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({ email, password });
@@ -92,7 +90,6 @@ function AuthView({ onAuthSuccess }) {
           <h2 className="text-xl font-bold text-zinc-100">球員卡雲端交易系統</h2>
           <p className="text-zinc-500 text-xs">登入後即可在全裝置跨設備同步記帳數據</p>
         </div>
-
         <form onSubmit={handleAuth} className="space-y-4">
           <div>
             <label className="text-zinc-400 text-xs font-medium mb-1 block">電子郵件信箱</label>
@@ -108,19 +105,16 @@ function AuthView({ onAuthSuccess }) {
               <input type="password" required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-9 pr-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
             </div>
           </div>
-
           {msg.text && (
             <p className={`text-xs font-medium p-3 rounded-lg border ${msg.isError ? "bg-rose-950/40 text-rose-400 border-rose-900" : "bg-emerald-950/40 text-emerald-400 border-emerald-900"}`}>
               {msg.text}
             </p>
           )}
-
           <button type="submit" disabled={loading} className="w-full py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition flex items-center justify-center gap-2 disabled:opacity-50">
             {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
             {isSignUp ? "註冊新帳號" : "登入系統"}
           </button>
         </form>
-
         <div className="text-center">
           <button onClick={() => { setIsSignUp(!isSignUp); setMsg({ text: "", isError: false }); }} className="text-xs text-zinc-400 hover:text-violet-400 underline transition">
             {isSignUp ? "已經有帳號了？返回登入" : "還沒有帳號？立即免費註冊"}
@@ -131,7 +125,7 @@ function AuthView({ onAuthSuccess }) {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── StatusBadge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const m = STATUS_META[status] ?? STATUS_META.in_stock;
   const Icon = m.icon;
@@ -142,6 +136,7 @@ function StatusBadge({ status }) {
   );
 }
 
+// ─── StatCard ─────────────────────────────────────────────────────────────────
 function StatCard({ icon: Icon, label, value, sub, accent }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 p-5 flex flex-col gap-2 transition-all hover:border-zinc-600">
@@ -157,97 +152,93 @@ function StatCard({ icon: Icon, label, value, sub, accent }) {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function Dashboard({ cards, pkgMap, accSales, accMap }) {
-  const sold = cards.filter(c => c.status === "sold" || c.status === "closed");
-  const totalRevenue = sold.reduce((s, c) => s + Number(c.sell_price ?? 0), 0);
-  const totalBuyCost = sold.reduce((s, c) => s + Number(c.buy_price ?? 0), 0);
-  const totalProfit  = sold.reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
-  const roi = totalBuyCost ? (totalProfit / totalBuyCost) * 100 : 0;
+  // 球員卡統計
+  const soldCards = cards.filter(c => c.status === "sold" || c.status === "closed");
+  const cardRevenue = soldCards.reduce((s, c) => s + Number(c.sell_price ?? 0), 0);
+  const cardBuyCost = soldCards.reduce((s, c) => s + Number(c.buy_price ?? 0), 0);
+  const cardProfit  = soldCards.reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
+  const cardRoi     = cardBuyCost ? (cardProfit / cardBuyCost) * 100 : 0;
 
-  // 卡具銷售統計
-  const totalAccRevenue = accSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
-  const totalAccProfit  = accSales.reduce((s, sale) => {
-    const cogsCost = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
-    const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
-    return s + (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
+  // 卡具統計
+  const accRevenue = accSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
+  const accCogs    = accSales.reduce((s, sale) => {
+    const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
+    const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
+    return s + cogs + pkg + (sale.platform_fee ?? 0);
   }, 0);
+  const accProfit  = accRevenue - accCogs;
+  const accRoi     = accCogs ? (accProfit / accCogs) * 100 : 0;
 
-  // 合計總獲利（卡片 + 卡具）
-  const grandTotalProfit = totalProfit + totalAccProfit;
+  // 綜合
+  const grandProfit = cardProfit + accProfit;
 
-  const monthlyProfit = (() => {
+  // 每月趨勢（卡片＋卡具）
+  const monthlyProfit = useMemo(() => {
     const result = [];
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const key = `${year}-${month}`;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const label = `${d.getMonth() + 1}月`;
 
-      const cardProfit = sold
+      const cp = soldCards
         .filter(c => (c.updated_at || c.created_at || "").startsWith(key))
         .reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
 
-      const accProfit = accSales
+      const ap = accSales
         .filter(s => (s.updated_at || s.created_at || "").startsWith(key))
         .reduce((s, sale) => {
-          const cogsCost = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
-          const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
-          return s + (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
+          const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
+          const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
+          return s + (sale.sell_price ?? 0) - cogs - pkg - (sale.platform_fee ?? 0);
         }, 0);
 
-      result.push({ key, label, profit: cardProfit + accProfit });
+      result.push({ key, label, profit: cp + ap });
     }
     return result;
-  })();
+  }, [soldCards, accSales, pkgMap, accMap]);
 
   const maxProfit = Math.max(...monthlyProfit.map(m => Math.abs(m.profit)), 1);
 
-  const channelData = (() => {
-    const channelMap = {};
-    sold.forEach(c => {
-      const ch = c.channel || "其他";
-      channelMap[ch] = (channelMap[ch] ?? 0) + (calcProfit(c, pkgMap) ?? 0);
-    });
-    accSales.forEach(sale => {
-      const ch = sale.channel || "其他";
-      const cogsCost = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
-      const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
-      const profit   = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
-      channelMap[ch] = (channelMap[ch] ?? 0) + profit;
-    });
-    return Object.entries(channelMap).sort((a, b) => b[1] - a[1]);
-  })();
-
-  const totalChProfit = channelData.reduce((s, [, v]) => s + Math.max(v, 0), 0) || 1;
-  const CHIP_COLORS = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-pink-500"];
+  // 右側面板：球員卡 vs 卡具的營業額與獲利進度條
+  const grandRevenue = cardRevenue + accRevenue;
+  const grandRevMax  = Math.max(grandRevenue, 1);
+  const grandProfitAbs = Math.max(Math.abs(cardProfit), Math.abs(accProfit), 1);
 
   return (
     <div className="space-y-6">
-      {/* 第一列：卡片統計 */}
+      {/* 第一行：球員卡 */}
       <div>
-        <p className="text-zinc-500 text-xs font-semibold tracking-wider uppercase mb-2 flex items-center gap-1.5"><CreditCard size={11}/>球員卡交易</p>
+        <p className="text-zinc-500 text-xs font-semibold tracking-wider uppercase mb-2 flex items-center gap-1.5">
+          <CreditCard size={11} /> 球員卡交易
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard icon={DollarSign} label="卡片總營業額" value={fmt(cardRevenue)} sub={`共 ${soldCards.length} 筆交易`} accent="bg-sky-600" />
+          <StatCard icon={TrendingUp} label="卡片總獲利"   value={fmt(cardProfit)}  sub={cardProfit >= 0 ? "盈利中" : "虧損中"} accent={cardProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"} />
+          <StatCard icon={BarChart3}  label="卡片投資報酬率" value={fmtPct(cardRoi)} sub="總獲利 / 售出總成本" accent="bg-violet-600" />
+        </div>
+      </div>
+
+      {/* 第二行：卡具 */}
+      <div>
+        <p className="text-zinc-500 text-xs font-semibold tracking-wider uppercase mb-2 flex items-center gap-1.5">
+          <Wrench size={11} /> 卡具銷售
+        </p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard icon={DollarSign} label="卡片總營業額"  value={fmt(totalRevenue)} sub={`共 ${sold.length} 筆交易`} accent="bg-sky-600" />
-          <StatCard icon={TrendingUp} label="卡片總獲利"    value={fmt(totalProfit)}  sub={totalProfit >= 0 ? "盈利中" : "虧損中"} accent={totalProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"} />
-          <StatCard icon={BarChart3}  label="卡片投資報酬率" value={fmtPct(roi)}       sub="總獲利 / 售出總成本"  accent="bg-violet-600" />
-          <StatCard icon={Boxes}      label="未售卡片"  value={cards.filter(c=>c.status==="in_stock" || c.status==="reserved").length} sub="張待售/保留" accent="bg-amber-600" />
+          <StatCard icon={ShoppingCart} label="卡具總銷售額"   value={fmt(accRevenue)} sub={`共 ${accSales.length} 筆訂單`} accent="bg-teal-600" />
+          <StatCard icon={TrendingUp}   label="卡具總獲利"     value={fmt(accProfit)}  sub={accProfit >= 0 ? "盈利中" : "虧損中"} accent={accProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"} />
+          <StatCard icon={BarChart3}    label="卡具投資報酬率" value={fmtPct(accRoi)}  sub="卡具獲利 / 卡具成本" accent="bg-cyan-700" />
+          <StatCard icon={DollarSign}   label="綜合總獲利"     value={fmt(grandProfit)} sub="卡片＋卡具合計" accent={grandProfit >= 0 ? "bg-violet-600" : "bg-rose-600"} />
         </div>
       </div>
 
-      {/* 第二列：卡具統計 */}
-      <div>
-        <p className="text-zinc-500 text-xs font-semibold tracking-wider uppercase mb-2 flex items-center gap-1.5"><Wrench size={11}/>卡具銷售</p>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-          <StatCard icon={ShoppingCart} label="卡具總銷售額" value={fmt(totalAccRevenue)} sub={`共 ${accSales.length} 筆訂單`} accent="bg-teal-600" />
-          <StatCard icon={TrendingUp}   label="卡具總獲利"   value={fmt(totalAccProfit)}  sub={totalAccProfit >= 0 ? "盈利中" : "虧損中"} accent={totalAccProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"} />
-          <StatCard icon={DollarSign}   label="綜合總獲利"   value={fmt(grandTotalProfit)} sub="卡片 + 卡具合計" accent={grandTotalProfit >= 0 ? "bg-violet-600" : "bg-rose-600"} />
-        </div>
-      </div>
-
+      {/* 第三行：圖表 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 左：每月趨勢 */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-          <h3 className="text-zinc-200 font-semibold mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-violet-400"/>每月獲利趨勢（卡片＋卡具）</h3>
+          <h3 className="text-zinc-200 font-semibold mb-4 flex items-center gap-2">
+            <TrendingUp size={16} className="text-violet-400" /> 每月獲利趨勢（卡片＋卡具）
+          </h3>
           <div className="flex items-end gap-2 h-40 pt-4">
             {monthlyProfit.map((m) => {
               const pct = (Math.abs(m.profit) / maxProfit) * 100;
@@ -265,37 +256,116 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
               );
             })}
           </div>
-          {sold.length === 0 && accSales.length === 0 && <p className="text-center text-zinc-600 text-sm mt-4">尚無已售出的交易紀錄</p>}
+          {soldCards.length === 0 && accSales.length === 0 && (
+            <p className="text-center text-zinc-600 text-sm mt-4">尚無已售出的交易紀錄</p>
+          )}
         </div>
 
+        {/* 右：球員卡 vs 卡具 進度條比較 */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-          <h3 className="text-zinc-200 font-semibold mb-4 flex items-center gap-2"><BarChart3 size={16} className="text-sky-400"/>交易管道獲利佔比（含卡具）</h3>
-          {channelData.length === 0
-            ? <p className="text-zinc-600 text-sm text-center py-10">尚無交易資料</p>
-            : <div className="space-y-4">
-                {channelData.map(([ch, profit], i) => {
-                  const pct = totalChProfit > 0 ? Math.max((Math.max(profit, 0) / totalChProfit) * 100, 0) : 0;
-                  return (
-                    <div key={ch}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-zinc-300 font-medium">{ch}</span>
-                        <span className={profit >= 0 ? "text-emerald-400" : "text-rose-400"}>{fmt(profit)}</span>
-                      </div>
-                      <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${CHIP_COLORS[i % CHIP_COLORS.length]}`} style={{ width: `${pct}%` }} />
-                      </div>
+          <h3 className="text-zinc-200 font-semibold mb-5 flex items-center gap-2">
+            <BarChart3 size={16} className="text-sky-400" /> 球員卡 vs 卡具 銷售比較
+          </h3>
+
+          {grandRevenue === 0 && accRevenue === 0 && cardRevenue === 0 ? (
+            <p className="text-zinc-600 text-sm text-center py-10">尚無交易資料</p>
+          ) : (
+            <div className="space-y-6">
+              {/* 營業額比較 */}
+              <div>
+                <p className="text-zinc-400 text-xs font-semibold tracking-wider uppercase mb-3">營業額</p>
+                <div className="space-y-3">
+                  {/* 球員卡 */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                        <CreditCard size={11} className="text-violet-400" /> 球員卡
+                      </span>
+                      <span className="font-mono text-zinc-200">{fmt(cardRevenue)}</span>
                     </div>
-                  );
-                })}
+                    <div className="h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-violet-500 transition-all"
+                        style={{ width: `${grandRevMax > 0 ? (cardRevenue / grandRevMax) * 100 : 0}%` }}
+                      />
+                    </div>
+                    <p className="text-zinc-600 text-[10px] mt-0.5 text-right">
+                      佔比 {grandRevMax > 0 ? ((cardRevenue / grandRevMax) * 100).toFixed(1) : "0.0"}%
+                    </p>
+                  </div>
+                  {/* 卡具 */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                        <Wrench size={11} className="text-teal-400" /> 卡具
+                      </span>
+                      <span className="font-mono text-zinc-200">{fmt(accRevenue)}</span>
+                    </div>
+                    <div className="h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-teal-500 transition-all"
+                        style={{ width: `${grandRevMax > 0 ? (accRevenue / grandRevMax) * 100 : 0}%` }}
+                      />
+                    </div>
+                    <p className="text-zinc-600 text-[10px] mt-0.5 text-right">
+                      佔比 {grandRevMax > 0 ? ((accRevenue / grandRevMax) * 100).toFixed(1) : "0.0"}%
+                    </p>
+                  </div>
+                </div>
               </div>
-          }
+
+              {/* 分隔線 */}
+              <div className="border-t border-zinc-800" />
+
+              {/* 獲利比較 */}
+              <div>
+                <p className="text-zinc-400 text-xs font-semibold tracking-wider uppercase mb-3">獲利</p>
+                <div className="space-y-3">
+                  {/* 球員卡獲利 */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                        <CreditCard size={11} className="text-violet-400" /> 球員卡
+                      </span>
+                      <span className={`font-mono font-bold ${cardProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                        {cardProfit >= 0 ? "+" : ""}{fmt(cardProfit)}
+                      </span>
+                    </div>
+                    <div className="h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${cardProfit >= 0 ? "bg-emerald-500" : "bg-rose-500"}`}
+                        style={{ width: `${grandProfitAbs > 0 ? (Math.abs(cardProfit) / grandProfitAbs) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                  {/* 卡具獲利 */}
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                        <Wrench size={11} className="text-teal-400" /> 卡具
+                      </span>
+                      <span className={`font-mono font-bold ${accProfit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                        {accProfit >= 0 ? "+" : ""}{fmt(accProfit)}
+                      </span>
+                    </div>
+                    <div className="h-2.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${accProfit >= 0 ? "bg-emerald-500" : "bg-rose-500"}`}
+                        style={{ width: `${grandProfitAbs > 0 ? (Math.abs(accProfit) / grandProfitAbs) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Card Modal ───────────────────────────────────────────────────────────────
+// ─── CardModal ────────────────────────────────────────────────────────────────
 function CardModal({ card, packaging, onSave, onClose }) {
   const [form, setForm] = useState(() => ({
     name: card?.name ?? "",
@@ -314,8 +384,7 @@ function CardModal({ card, packaging, onSave, onClose }) {
     if (packaging.length === 0) return alert("請先至包材管理頁面建立包材規格");
     set("pkg_usages", [...form.pkg_usages, { id: uid(), pkg_id: packaging[0].id, qty: 1, unit_cost_snap: packaging[0].unit_cost }]);
   };
-  const rmPkg  = (i) => set("pkg_usages", form.pkg_usages.filter((_, j) => j !== i));
-  
+  const rmPkg = (i) => set("pkg_usages", form.pkg_usages.filter((_, j) => j !== i));
   const setPkg = (i, field, val) => set("pkg_usages", form.pkg_usages.map((u, j) => {
     if (j !== i) return u;
     if (field === "pkg_id") {
@@ -331,9 +400,9 @@ function CardModal({ card, packaging, onSave, onClose }) {
     return s + cost * (Number(u.qty) || 0);
   }, 0);
 
-  const sellNum   = Number(form.sell_price) || 0;
-  const buyNum    = Number(form.buy_price)  || 0;
-  const feeNum    = Number(form.platform_fee) || 0;
+  const sellNum = Number(form.sell_price) || 0;
+  const buyNum  = Number(form.buy_price) || 0;
+  const feeNum  = Number(form.platform_fee) || 0;
   const netProfit = sellNum - buyNum - totalPkgCost - feeNum;
 
   const handleSave = () => {
@@ -341,16 +410,15 @@ function CardModal({ card, packaging, onSave, onClose }) {
     const snappedUsages = form.pkg_usages.map(u => ({
       ...u,
       unit_cost_snap: pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0,
-      qty: Math.max(1, Number(u.qty) || 1)
+      qty: Math.max(1, Number(u.qty) || 1),
     }));
-
     onSave({
       ...card,
       ...form,
       pkg_usages: snappedUsages,
       buy_price: buyNum,
       sell_price: form.status === "sold" || form.status === "closed" ? sellNum : null,
-      platform_fee: feeNum
+      platform_fee: feeNum,
     });
   };
 
@@ -365,7 +433,6 @@ function CardModal({ card, packaging, onSave, onClose }) {
           </h2>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center hover:bg-zinc-700 transition"><X size={15} className="text-zinc-400" /></button>
         </div>
-
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
           <div>
             <label className="text-zinc-400 text-xs font-medium mb-1 block">卡片名稱 *</label>
@@ -402,7 +469,6 @@ function CardModal({ card, packaging, onSave, onClose }) {
             <label className="text-zinc-400 text-xs font-medium mb-1 block">平台手續費（元）</label>
             <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} disabled={form.status === "in_stock" || form.status === "reserved"} />
           </div>
-
           <div className="border-t border-zinc-800 pt-3">
             <div className="flex items-center justify-between mb-2">
               <label className="text-zinc-400 text-xs font-medium block">使用包材（可點擊追加多個）</label>
@@ -425,7 +491,6 @@ function CardModal({ card, packaging, onSave, onClose }) {
               ))}
             </div>
           </div>
-
           {(form.status === "sold" || form.status === "closed") && (
             <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3.5 space-y-1.5">
               <div className="flex justify-between text-xs text-zinc-400"><span>卡片售出金額</span><span className="text-zinc-200">{fmt(sellNum)}</span></div>
@@ -438,13 +503,11 @@ function CardModal({ card, packaging, onSave, onClose }) {
               </div>
             </div>
           )}
-
           <div>
             <label className="text-zinc-400 text-xs font-medium mb-1 block">備註（卡況描述/PSA證號）</label>
             <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="例如：PSA 10 Gem Mint" value={form.notes} onChange={e => set("notes", e.target.value)} />
           </div>
         </div>
-
         <div className="p-5 border-t border-zinc-800 flex gap-3 bg-zinc-950 rounded-b-2xl">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:bg-zinc-800 transition">取消</button>
           <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition">儲存回傳雲端</button>
@@ -454,33 +517,84 @@ function CardModal({ card, packaging, onSave, onClose }) {
   );
 }
 
-// ─── Cards Page ───────────────────────────────────────────────────────────────
+// ─── Pagination ───────────────────────────────────────────────────────────────
+function Pagination({ page, totalPages, onPage }) {
+  if (totalPages <= 1) return null;
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) pages.push(i);
+  return (
+    <div className="flex items-center justify-center gap-1.5 pt-4">
+      <button
+        onClick={() => onPage(page - 1)}
+        disabled={page === 1}
+        className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+      >
+        <ChevronLeft size={14} />
+      </button>
+      {pages.map(p => (
+        <button
+          key={p}
+          onClick={() => onPage(p)}
+          className={`w-8 h-8 rounded-lg text-xs font-semibold transition border ${p === page ? "bg-violet-600 border-violet-500 text-white" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800"}`}
+        >
+          {p}
+        </button>
+      ))}
+      <button
+        onClick={() => onPage(page + 1)}
+        disabled={page === totalPages}
+        className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition"
+      >
+        <ChevronRight size={14} />
+      </button>
+    </div>
+  );
+}
+
+// ─── CardsPage ────────────────────────────────────────────────────────────────
 function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [modalCard, setModalCard] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [page, setPage] = useState(1);
   const pkgMap = useMemo(() => Object.fromEntries(packaging.map(p => [p.id, p])), [packaging]);
 
+  // 排序：越早新增的在上面（ascending by created_at / id）
+  // 從 Supabase 撈資料時已改為 ascending，這裡再做一次本地排序保險
   const filtered = useMemo(() => {
-    return cards.filter(c => {
-      const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || (c.notes || "").toLowerCase().includes(search.toLowerCase());
-      const matchStatus = filterStatus === "all" || c.status === filterStatus;
-      return matchSearch && matchStatus;
-    });
+    return [...cards]
+      .sort((a, b) => {
+        // created_at 是 "YYYY-MM" 字串，id 是 UUID，用 id fallback
+        const ka = a.created_at ?? a.id ?? "";
+        const kb = b.created_at ?? b.id ?? "";
+        return ka < kb ? -1 : ka > kb ? 1 : 0;
+      })
+      .filter(c => {
+        const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || (c.notes || "").toLowerCase().includes(search.toLowerCase());
+        const matchStatus = filterStatus === "all" || c.status === filterStatus;
+        return matchSearch && matchStatus;
+      });
   }, [cards, search, filterStatus]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // 當篩選條件變動時回到第1頁
+  const handleSearch = (v) => { setSearch(v); setPage(1); };
+  const handleFilter = (v) => { setFilterStatus(v); setPage(1); };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-          <input className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="搜尋卡片名稱或備註…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="搜尋卡片名稱或備註…" value={search} onChange={e => handleSearch(e.target.value)} />
         </div>
         <div className="flex gap-2 items-center">
           <div className="relative">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <select className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-8 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition appearance-none" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <select className="bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-8 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition appearance-none" value={filterStatus} onChange={e => handleFilter(e.target.value)}>
               <option value="all">全部狀態</option>
               {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
             </select>
@@ -495,72 +609,84 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
           <p className="text-sm">尚無任何交易清單</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          <div className="hidden lg:grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
-            <span>卡片明細</span><span>買入成本</span><span>出售價格</span><span>每筆訂單獲利</span><span>狀態</span><span>操作</span>
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-zinc-500 text-xs">共 {filtered.length} 筆記錄，第 {page} / {totalPages} 頁</p>
           </div>
-          {filtered.map(card => {
-            const profit = calcProfit(card, pkgMap);
-            return (
-              <div key={card.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
-                {/* Mobile */}
-                <div className="lg:hidden space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-zinc-100 font-medium text-sm leading-snug">{card.name}</p>
-                      {card.notes && <p className="text-zinc-500 text-xs mt-0.5">{card.notes}</p>}
+          <div className="space-y-2">
+            <div className="hidden lg:grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
+              <span>卡片明細</span><span>買入成本</span><span>出售價格</span><span>每筆訂單獲利</span><span>狀態</span><span>操作</span>
+            </div>
+            {paginated.map(card => {
+              const profit = calcProfit(card, pkgMap);
+              return (
+                <div key={card.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
+                  {/* Mobile */}
+                  <div className="lg:hidden space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-zinc-100 font-medium text-sm leading-snug">{card.name}</p>
+                        {card.notes && <p className="text-zinc-500 text-xs mt-0.5">{card.notes}</p>}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => { setModalCard(card); setShowModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
+                        <button onClick={() => onDelete(card.id)} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-rose-950 flex items-center justify-center transition text-zinc-500 hover:text-rose-400"><Trash2 size={13} /></button>
+                      </div>
                     </div>
-                    <div className="flex gap-1 shrink-0">
+                    <div className="grid grid-cols-3 gap-1 text-xs border-y border-zinc-800/50 py-1.5 my-1 font-mono">
+                      <div><span className="text-zinc-500 block">買入</span><span className="text-zinc-300">{fmt(card.buy_price)}</span></div>
+                      <div><span className="text-zinc-500 block">賣出</span><span className="text-zinc-300">{card.sell_price ? fmt(card.sell_price) : "—"}</span></div>
+                      <div><span className="text-zinc-500 block">利潤</span>{profit !== null ? <span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span> : <span className="text-zinc-600">—</span>}</div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <StatusBadge status={card.status} />
+                      {card.channel && <span className="text-zinc-500 text-xs bg-zinc-800 px-2 py-0.5 rounded-md">{card.channel}</span>}
+                    </div>
+                  </div>
+                  {/* Desktop */}
+                  <div className="hidden lg:grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr_auto] gap-4 items-center">
+                    <div>
+                      <p className="text-zinc-100 text-sm font-medium truncate">{card.name}</p>
+                      {card.notes ? <p className="text-zinc-500 text-xs truncate mt-0.5">{card.notes}</p> : <span className="text-zinc-700 text-xs">—</span>}
+                    </div>
+                    <span className="text-zinc-300 text-sm font-mono">{fmt(card.buy_price)}</span>
+                    <span className="text-zinc-300 text-sm font-mono">{card.sell_price ? fmt(card.sell_price) : <span className="text-zinc-700">—</span>}</span>
+                    <span className={`text-sm font-mono font-bold ${profit === null ? "text-zinc-600" : profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      {profit === null ? "—" : `${profit >= 0 ? "+" : ""}${fmt(profit, 1)}`}
+                    </span>
+                    <StatusBadge status={card.status} />
+                    <div className="flex gap-1.5">
                       <button onClick={() => { setModalCard(card); setShowModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
                       <button onClick={() => onDelete(card.id)} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-rose-950 flex items-center justify-center transition text-zinc-500 hover:text-rose-400"><Trash2 size={13} /></button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1 text-xs border-y border-zinc-800/50 py-1.5 my-1 font-mono">
-                    <div><span className="text-zinc-500 block">買入</span><span className="text-zinc-300">{fmt(card.buy_price)}</span></div>
-                    <div><span className="text-zinc-500 block">賣出</span><span className="text-zinc-300">{card.sell_price ? fmt(card.sell_price) : "—"}</span></div>
-                    <div><span className="text-zinc-500 block">利潤</span>{profit !== null ? <span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span> : <span className="text-zinc-600">—</span>}</div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <StatusBadge status={card.status} />
-                    {card.channel && <span className="text-zinc-500 text-xs bg-zinc-800 px-2 py-0.5 rounded-md">{card.channel}</span>}
-                  </div>
                 </div>
-
-                {/* Desktop */}
-                <div className="hidden lg:grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr_auto] gap-4 items-center">
-                  <div>
-                    <p className="text-zinc-100 text-sm font-medium truncate">{card.name}</p>
-                    {card.notes ? <p className="text-zinc-500 text-xs truncate mt-0.5">{card.notes}</p> : <span className="text-zinc-700 text-xs">—</span>}
-                  </div>
-                  <span className="text-zinc-300 text-sm font-mono">{fmt(card.buy_price)}</span>
-                  <span className="text-zinc-300 text-sm font-mono">{card.sell_price ? fmt(card.sell_price) : <span className="text-zinc-700">—</span>}</span>
-                  <span className={`text-sm font-mono font-bold ${profit === null ? "text-zinc-600" : profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {profit === null ? "—" : `${profit >= 0 ? "+" : ""}${fmt(profit, 1)}`}
-                  </span>
-                  <StatusBadge status={card.status} />
-                  <div className="flex gap-1.5">
-                    <button onClick={() => { setModalCard(card); setShowModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
-                    <button onClick={() => onDelete(card.id)} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-rose-950 flex items-center justify-center transition text-zinc-500 hover:text-rose-400"><Trash2 size={13} /></button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <Pagination page={page} totalPages={totalPages} onPage={setPage} />
+        </>
       )}
 
-      {showModal && <CardModal card={modalCard} packaging={packaging} onSave={(data) => { if (data.id) onEdit(data); else onAdd(data); setShowModal(false); }} onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <CardModal
+          card={modalCard}
+          packaging={packaging}
+          onSave={(data) => { if (data.id) onEdit(data); else onAdd(data); setShowModal(false); }}
+          onClose={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }
 
-// ─── Packaging Modal ──────────────────────────────────────────────────────────
+// ─── PkgModal ─────────────────────────────────────────────────────────────────
 function PkgModal({ pkg, onSave, onClose }) {
   const isRestock = !!pkg?.id;
   const [form, setForm] = useState(isRestock ? { qty_add: "", total_cost: "" } : { name: "", stock: "", unit_cost: "" });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const newUnitCost = isRestock && form.qty_add && form.total_cost ? (Number(form.total_cost) / Number(form.qty_add)).toFixed(1) : null;
+  const newUnitCost = isRestock && form.qty_add && form.total_cost
+    ? (Number(form.total_cost) / Number(form.qty_add)).toFixed(1) : null;
 
   const handleSave = () => {
     if (isRestock) {
@@ -629,20 +755,15 @@ function PkgModal({ pkg, onSave, onClose }) {
   );
 }
 
-// ─── Card Accessories (卡具) Page ──────────────────────────────────────────────
+// ─── AccessoryModal ───────────────────────────────────────────────────────────
 function AccessoryModal({ acc, onSave, onClose }) {
   const isRestock = !!acc?.id;
   const [form, setForm] = useState(
-    isRestock
-      ? { qty_add: "", total_cost: "" }
-      : { name: "", stock: "", unit_cost: "" }
+    isRestock ? { qty_add: "", total_cost: "" } : { name: "", stock: "", unit_cost: "" }
   );
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const newUnitCost =
-    isRestock && form.qty_add && form.total_cost
-      ? (Number(form.total_cost) / Number(form.qty_add)).toFixed(1)
-      : null;
+  const newUnitCost = isRestock && form.qty_add && form.total_cost
+    ? (Number(form.total_cost) / Number(form.qty_add)).toFixed(1) : null;
 
   const handleSave = () => {
     if (isRestock) {
@@ -711,7 +832,7 @@ function AccessoryModal({ acc, onSave, onClose }) {
   );
 }
 
-// ─── Accessory Sale Modal ──────────────────────────────────────────────────────
+// ─── AccessorySaleModal ───────────────────────────────────────────────────────
 function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
   const [form, setForm] = useState(() => ({
     buyer_note: sale?.buyer_note ?? "",
@@ -723,11 +844,9 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
   }));
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
   const pkgMap = useMemo(() => Object.fromEntries(packaging.map(p => [p.id, p])), [packaging]);
   const accMap = useMemo(() => Object.fromEntries(accessories.map(a => [a.id, a])), [accessories]);
 
-  // Items management
   const addItem = () => {
     if (accessories.length === 0) return alert("請先在卡具庫存頁面新增卡具品項");
     const first = accessories[0];
@@ -743,10 +862,9 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
         return { ...it, acc_id: val, unit_cost_snap: a?.unit_cost ?? 0 };
       }
       return { ...it, [field]: val };
-    })
+    }),
   }));
 
-  // Packaging management
   const addPkg = () => {
     if (packaging.length === 0) return alert("請先至包材管理頁面建立包材規格");
     setForm(f => ({ ...f, pkg_usages: [...f.pkg_usages, { id: uid(), pkg_id: packaging[0].id, qty: 1, unit_cost_snap: packaging[0].unit_cost }] }));
@@ -761,7 +879,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
         return { ...u, pkg_id: val, unit_cost_snap: p?.unit_cost ?? 0 };
       }
       return { ...u, [field]: val };
-    })
+    }),
   }));
 
   const totalCostOfGoods = form.items.reduce((s, it) => {
@@ -772,8 +890,8 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
     const cost = pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0;
     return s + cost * (Number(u.qty) || 0);
   }, 0);
-  const sellNum = Number(form.sell_price) || 0;
-  const feeNum = Number(form.platform_fee) || 0;
+  const sellNum   = Number(form.sell_price) || 0;
+  const feeNum    = Number(form.platform_fee) || 0;
   const netProfit = sellNum - totalCostOfGoods - totalPkgCost - feeNum;
 
   const handleSave = () => {
@@ -788,14 +906,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
       unit_cost_snap: pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0,
       qty: Math.max(1, Number(u.qty) || 1),
     }));
-    onSave({
-      ...sale,
-      ...form,
-      items: snappedItems,
-      pkg_usages: snappedPkgs,
-      sell_price: sellNum,
-      platform_fee: feeNum,
-    });
+    onSave({ ...sale, ...form, items: snappedItems, pkg_usages: snappedPkgs, sell_price: sellNum, platform_fee: feeNum });
   };
 
   return (
@@ -809,12 +920,10 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
           </h2>
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center hover:bg-zinc-700 transition"><X size={15} className="text-zinc-400" /></button>
         </div>
-
         <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          {/* Items */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-zinc-300 text-sm font-semibold flex items-center gap-1.5"><Tag size={13} className="text-teal-400"/>銷售卡具品項 *</label>
+              <label className="text-zinc-300 text-sm font-semibold flex items-center gap-1.5"><Tag size={13} className="text-teal-400" />銷售卡具品項 *</label>
               <button onClick={addItem} className="flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 transition"><PlusCircle size={13} /> 新增品項</button>
             </div>
             {form.items.length === 0 && <p className="text-zinc-600 text-xs py-1">尚未選擇任何卡具品項</p>}
@@ -837,8 +946,6 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
               <p className="text-right text-xs text-zinc-500 mt-1.5">卡具成本合計：<span className="text-zinc-300 font-mono">{fmt(totalCostOfGoods, 1)}</span></p>
             )}
           </div>
-
-          {/* Sale price + channel */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-zinc-400 text-xs font-medium mb-1 block">實際售出總金額（元）</label>
@@ -855,8 +962,6 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
             <label className="text-zinc-400 text-xs font-medium mb-1 block">平台手續費（元）</label>
             <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} />
           </div>
-
-          {/* Packaging */}
           <div className="border-t border-zinc-800 pt-3">
             <div className="flex items-center justify-between mb-2">
               <label className="text-zinc-400 text-xs font-medium block">使用包材（選填）</label>
@@ -879,14 +984,10 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
               ))}
             </div>
           </div>
-
-          {/* Buyer note */}
           <div>
             <label className="text-zinc-400 text-xs font-medium mb-1 block">備註（買家 / 訂單說明）</label>
             <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="例如：蝦皮訂單 #123" value={form.buyer_note} onChange={e => set("buyer_note", e.target.value)} />
           </div>
-
-          {/* Profit summary */}
           {sellNum > 0 && (
             <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3.5 space-y-1.5">
               <div className="flex justify-between text-xs text-zinc-400"><span>卡具售出金額</span><span className="text-zinc-200">{fmt(sellNum)}</span></div>
@@ -900,7 +1001,6 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
             </div>
           )}
         </div>
-
         <div className="p-5 border-t border-zinc-800 flex gap-3 bg-zinc-950 rounded-b-2xl">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:bg-zinc-800 transition">取消</button>
           <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium transition">確認存檔</button>
@@ -910,7 +1010,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
   );
 }
 
-// ─── Accessories Page (卡具頁) ─────────────────────────────────────────────────
+// ─── AccessoriesPage ──────────────────────────────────────────────────────────
 function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDeleteAcc, onAddSale, onEditSale, onDeleteSale }) {
   const [subTab, setSubTab] = useState("inventory");
   const [accModal, setAccModal] = useState(null);
@@ -921,16 +1021,15 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
   const accMap = useMemo(() => Object.fromEntries(accessories.map(a => [a.id, a])), [accessories]);
 
   const totalInventoryCost = accessories.reduce((s, a) => s + a.stock * a.unit_cost, 0);
-  const totalSalesRevenue = accSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
-  const totalSalesProfit = accSales.reduce((s, sale) => {
+  const totalSalesRevenue  = accSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
+  const totalSalesProfit   = accSales.reduce((s, sale) => {
     const cogsCost = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
-    const pkgCost = calcPkgCost(sale.pkg_usages, pkgMap);
+    const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
     return s + (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
   }, 0);
 
   return (
     <div className="space-y-4">
-      {/* Sub-tab toggle */}
       <div className="flex items-center gap-2">
         <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 gap-1">
           <button onClick={() => setSubTab("inventory")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${subTab === "inventory" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}>
@@ -950,14 +1049,12 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
         </div>
       </div>
 
-      {/* Summary stats */}
       <div className="grid grid-cols-3 gap-3">
-        <StatCard icon={Boxes} label="卡具總庫存成本" value={fmt(totalInventoryCost, 1)} sub={`${accessories.length} 種品項`} accent="bg-teal-700" />
-        <StatCard icon={DollarSign} label="卡具總銷售額" value={fmt(totalSalesRevenue)} sub={`共 ${accSales.length} 筆訂單`} accent="bg-sky-600" />
-        <StatCard icon={TrendingUp} label="卡具總獲利" value={fmt(totalSalesProfit, 1)} sub={totalSalesProfit >= 0 ? "盈利中" : "虧損中"} accent={totalSalesProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"} />
+        <StatCard icon={Boxes}      label="卡具總庫存成本" value={fmt(totalInventoryCost, 1)} sub={`${accessories.length} 種品項`} accent="bg-teal-700" />
+        <StatCard icon={DollarSign} label="卡具總銷售額"   value={fmt(totalSalesRevenue)}     sub={`共 ${accSales.length} 筆訂單`} accent="bg-sky-600" />
+        <StatCard icon={TrendingUp} label="卡具總獲利"     value={fmt(totalSalesProfit, 1)}   sub={totalSalesProfit >= 0 ? "盈利中" : "虧損中"} accent={totalSalesProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"} />
       </div>
 
-      {/* Inventory sub-tab */}
       {subTab === "inventory" && (
         <div className="space-y-2">
           <p className="text-zinc-400 text-sm">目前已建立 <span className="text-teal-400 font-bold">{accessories.length}</span> 種卡具品項</p>
@@ -976,12 +1073,11 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                 const totalCost = a.stock * a.unit_cost;
                 return (
                   <div key={a.id} className={`rounded-2xl border transition p-4 ${low ? "border-rose-900 bg-rose-950/20" : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"}`}>
-                    {/* Mobile */}
                     <div className="sm:hidden flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-zinc-100 font-medium text-sm">{a.name}</p>
-                          {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10}/>低庫存</span>}
+                          {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10} />低庫存</span>}
                         </div>
                         <div className="flex gap-4 mt-2 text-xs text-zinc-400 font-mono flex-wrap">
                           <div>庫存：<span className={`font-bold ${low ? "text-rose-400" : "text-zinc-200"}`}>{a.stock}</span> 個</div>
@@ -994,12 +1090,11 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                         <button onClick={() => onDeleteAcc(a.id)} className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-rose-950 flex items-center justify-center text-zinc-600 hover:text-rose-400 transition border border-transparent"><Trash2 size={13} /></button>
                       </div>
                     </div>
-                    {/* Desktop */}
                     <div className="hidden sm:grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_auto] gap-4 items-center">
                       <div className="flex items-center gap-2">
                         <Wrench size={14} className={low ? "text-rose-500" : "text-teal-500"} />
                         <span className="text-zinc-100 text-sm font-medium">{a.name}</span>
-                        {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10}/>低庫存</span>}
+                        {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10} />低庫存</span>}
                       </div>
                       <span className={`text-sm font-mono font-bold ${low ? "text-rose-400" : "text-zinc-200"}`}>{a.stock} <span className="text-zinc-600 text-xs font-normal">個</span></span>
                       <span className="text-zinc-200 text-sm font-mono">{fmt(a.unit_cost, 1)}<span className="text-zinc-600 text-xs"> /個</span></span>
@@ -1017,7 +1112,6 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
         </div>
       )}
 
-      {/* Sales sub-tab */}
       {subTab === "sales" && (
         <div className="space-y-2">
           <p className="text-zinc-400 text-sm">共 <span className="text-teal-400 font-bold">{accSales.length}</span> 筆卡具銷售紀錄</p>
@@ -1033,16 +1127,11 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
               </div>
               {accSales.map(sale => {
                 const cogsCost = (sale.items || []).reduce((s, it) => s + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
-                const pkgCost = calcPkgCost(sale.pkg_usages, pkgMap);
-                const profit = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
-                const itemSummary = (sale.items || []).map(it => {
-                  const name = accMap[it.acc_id]?.name ?? "已刪除品項";
-                  return `${name} ×${it.qty}`;
-                }).join("、");
-
+                const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
+                const profit   = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
+                const itemSummary = (sale.items || []).map(it => `${accMap[it.acc_id]?.name ?? "已刪除品項"} ×${it.qty}`).join("、");
                 return (
                   <div key={sale.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
-                    {/* Mobile */}
                     <div className="lg:hidden space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
@@ -1061,7 +1150,6 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                       </div>
                       {sale.channel && <span className="text-zinc-500 text-xs bg-zinc-800 px-2 py-0.5 rounded-md">{sale.channel}</span>}
                     </div>
-                    {/* Desktop */}
                     <div className="hidden lg:grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_auto] gap-4 items-center">
                       <div>
                         <p className="text-zinc-100 text-sm font-medium truncate">{itemSummary || "（無品項）"}</p>
@@ -1090,17 +1178,15 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
   );
 }
 
-// ─── Packaging Page ───────────────────────────────────────────────────────────
+// ─── PackagingPage ────────────────────────────────────────────────────────────
 function PackagingPage({ packaging, onPkgUpdate, onDeletePkg }) {
   const [modal, setModal] = useState(null);
-
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="text-zinc-400 text-sm">目前已建立 <span className="text-amber-400 font-bold">{packaging.length}</span> 種基本包材</p>
         <button onClick={() => setModal({ type: "new" })} className="flex items-center gap-1.5 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-sm font-medium transition"><Plus size={15} /> 新增包材規格</button>
       </div>
-
       {packaging.length === 0 ? (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-12 text-center text-zinc-600">
           <Package size={36} className="mx-auto mb-3 opacity-30" />
@@ -1115,12 +1201,11 @@ function PackagingPage({ packaging, onPkgUpdate, onDeletePkg }) {
             const low = p.stock <= 10;
             return (
               <div key={p.id} className={`rounded-2xl border transition p-4 ${low ? "border-rose-900 bg-rose-950/20" : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"}`}>
-                {/* Mobile */}
                 <div className="sm:hidden flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-zinc-100 font-medium text-sm">{p.name}</p>
-                      {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10}/>低庫存</span>}
+                      {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10} />低庫存</span>}
                     </div>
                     <div className="flex gap-4 mt-2 text-xs text-zinc-400 font-mono">
                       <div>庫存：<span className={`font-bold ${low ? "text-rose-400" : "text-zinc-200"}`}>{p.stock}</span> 個</div>
@@ -1132,13 +1217,11 @@ function PackagingPage({ packaging, onPkgUpdate, onDeletePkg }) {
                     <button onClick={() => onDeletePkg(p.id)} className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-rose-950 flex items-center justify-center text-zinc-600 hover:text-rose-400 transition border border-transparent"><Trash2 size={13} /></button>
                   </div>
                 </div>
-
-                {/* Desktop */}
                 <div className="hidden sm:grid grid-cols-[2.5fr_1.2fr_1.2fr_auto] gap-4 items-center">
                   <div className="flex items-center gap-2">
                     <Package size={14} className={low ? "text-rose-500" : "text-zinc-500"} />
                     <span className="text-zinc-100 text-sm font-medium">{p.name}</span>
-                    {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10}/>低庫存</span>}
+                    {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10} />低庫存</span>}
                   </div>
                   <span className={`text-sm font-mono font-bold ${low ? "text-rose-400" : "text-zinc-200"}`}>{p.stock} <span className="text-zinc-600 text-xs font-normal">個</span></span>
                   <span className="text-zinc-200 text-sm font-mono">{fmt(p.unit_cost, 1)}<span className="text-zinc-600 text-xs"> /個</span></span>
@@ -1152,21 +1235,20 @@ function PackagingPage({ packaging, onPkgUpdate, onDeletePkg }) {
           })}
         </div>
       )}
-
       {modal && <PkgModal pkg={modal?.type === "new" ? null : modal} onSave={(data) => { onPkgUpdate(data); setModal(null); }} onClose={() => setModal(null)} />}
     </div>
   );
 }
 
-// ─── 主應用 Root App ──────────────────────────────────────────────────────────
+// ─── Root App ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser]           = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [tab, setTab] = useState("dashboard");
-  const [cards, setCards] = useState([]);
-  const [packaging, setPkg] = useState([]);
-  const [accessories, setAcc] = useState([]);
-  const [accSales, setAccSales] = useState([]);
+  const [tab, setTab]             = useState("dashboard");
+  const [cards, setCards]         = useState([]);
+  const [packaging, setPkg]       = useState([]);
+  const [accessories, setAcc]     = useState([]);
+  const [accSales, setAccSales]   = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
 
   useEffect(() => {
@@ -1174,11 +1256,9 @@ export default function App() {
       setUser(session?.user ?? null);
       setAuthChecked(true);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -1187,14 +1267,14 @@ export default function App() {
     setDataLoading(true);
     try {
       const [cardsRes, pkgRes, accRes, accSalesRes] = await Promise.all([
-        supabase.from("cards").select("*").order("created_at", { ascending: false }),
+        // 越早新增的在上面 → ascending
+        supabase.from("cards").select("*").order("created_at", { ascending: true }),
         supabase.from("packaging").select("*").order("created_at", { ascending: true }),
         supabase.from("accessories").select("*").order("created_at", { ascending: true }),
         supabase.from("acc_sales").select("*").order("created_at", { ascending: false }),
       ]);
       if (cardsRes.error) throw cardsRes.error;
       if (pkgRes.error) throw pkgRes.error;
-
       setCards(cardsRes.data || []);
       setPkg(pkgRes.data || []);
       setAcc(accRes.data || []);
@@ -1229,22 +1309,20 @@ export default function App() {
     });
   };
 
-  // ── Card 雲端控制 ──
+  // ── Cards ──
   const addCard = useCallback(async (data) => {
     if (!user) return;
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-
     let nextPkgs = [...packaging];
     if (data.status === "sold" || data.status === "closed") {
       nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, nextPkgs);
     }
-
     const newCardRow = { user_id: user.id, ...data, created_at: currentMonth, updated_at: currentMonth };
     const { data: inserted, error } = await supabase.from("cards").insert([newCardRow]).select();
     if (error) return alert("雲端新增失敗: " + error.message);
-
-    if (inserted) setCards(cs => [inserted[0], ...cs]);
+    // 插入後追加到最後（ascending 排序）
+    if (inserted) setCards(cs => [...cs, inserted[0]]);
     await syncPackagingStockToCloud(nextPkgs);
   }, [user, packaging]);
 
@@ -1252,13 +1330,10 @@ export default function App() {
     if (!user) return;
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-
     const originalCard = cards.find(c => c.id === data.id);
     if (!originalCard) return;
-
     const wasDeducted = originalCard.status === "sold" || originalCard.status === "closed";
     const willDeduct  = data.status === "sold" || data.status === "closed";
-
     let nextPkgs = [...packaging];
     if (wasDeducted && !willDeduct) {
       nextPkgs = adjustPackagingStockLocal(originalCard.pkg_usages, 1, nextPkgs);
@@ -1268,10 +1343,8 @@ export default function App() {
       nextPkgs = adjustPackagingStockLocal(originalCard.pkg_usages, 1, nextPkgs);
       nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, nextPkgs);
     }
-
     const { error } = await supabase.from("cards").update({ ...data, updated_at: currentMonth }).eq("id", data.id);
     if (error) return alert("雲端更新失敗: " + error.message);
-
     setCards(cs => cs.map(c => c.id === data.id ? { ...data, updated_at: currentMonth } : c));
     await syncPackagingStockToCloud(nextPkgs);
   }, [user, cards, packaging]);
@@ -1280,20 +1353,17 @@ export default function App() {
     if (!confirm("確定要刪除這張卡片紀錄嗎？")) return;
     const target = cards.find(c => c.id === id);
     if (!target) return;
-
     let nextPkgs = [...packaging];
     if (target.status === "sold" || target.status === "closed") {
       nextPkgs = adjustPackagingStockLocal(target.pkg_usages, 1, nextPkgs);
     }
-
     const { error } = await supabase.from("cards").delete().eq("id", id);
     if (error) return alert("雲端刪除失敗: " + error.message);
-
     setCards(cs => cs.filter(c => c.id !== id));
     await syncPackagingStockToCloud(nextPkgs);
   }, [cards, packaging]);
 
-  // ── 包材雲端控制 ──
+  // ── Packaging ──
   const handlePkgUpdate = useCallback(async (data) => {
     if (!user) return;
     if (data.type === "new") {
@@ -1305,14 +1375,9 @@ export default function App() {
       const p = packaging.find(item => item.id === data.id);
       if (!p) return;
       const currentTotalCost = p.stock * p.unit_cost;
-      const finalStock = p.stock + data.qty_add;
+      const finalStock    = p.stock + data.qty_add;
       const finalUnitCost = finalStock > 0 ? (currentTotalCost + data.total_cost) / finalStock : 0;
-
-      const { error } = await supabase.from("packaging").update({
-        stock: finalStock,
-        unit_cost: parseFloat(finalUnitCost.toFixed(1))
-      }).eq("id", data.id);
-
+      const { error } = await supabase.from("packaging").update({ stock: finalStock, unit_cost: parseFloat(finalUnitCost.toFixed(1)) }).eq("id", data.id);
       if (error) return alert("進貨失敗: " + error.message);
       setPkg(ps => ps.map(item => item.id === data.id ? { ...item, stock: finalStock, unit_cost: parseFloat(finalUnitCost.toFixed(1)) } : item));
     }
@@ -1325,7 +1390,7 @@ export default function App() {
     setPkg(ps => ps.filter(p => p.id !== id));
   }, []);
 
-  // ── 卡具雲端控制 ──
+  // ── Accessories ──
   const handleAccUpdate = useCallback(async (data) => {
     if (!user) return;
     if (data.type === "new") {
@@ -1337,12 +1402,9 @@ export default function App() {
       const a = accessories.find(item => item.id === data.id);
       if (!a) return;
       const currentTotalCost = a.stock * a.unit_cost;
-      const finalStock = a.stock + data.qty_add;
+      const finalStock    = a.stock + data.qty_add;
       const finalUnitCost = finalStock > 0 ? (currentTotalCost + data.total_cost) / finalStock : 0;
-      const { error } = await supabase.from("accessories").update({
-        stock: finalStock,
-        unit_cost: parseFloat(finalUnitCost.toFixed(1))
-      }).eq("id", data.id);
+      const { error } = await supabase.from("accessories").update({ stock: finalStock, unit_cost: parseFloat(finalUnitCost.toFixed(1)) }).eq("id", data.id);
       if (error) return alert("補貨失敗: " + error.message);
       setAcc(ps => ps.map(item => item.id === data.id ? { ...item, stock: finalStock, unit_cost: parseFloat(finalUnitCost.toFixed(1)) } : item));
     }
@@ -1375,9 +1437,8 @@ export default function App() {
     if (!user) return;
     const today = new Date();
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-    let nextAcc = adjustAccStockLocal(data.items, -1, [...accessories]);
+    let nextAcc  = adjustAccStockLocal(data.items, -1, [...accessories]);
     let nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, [...packaging]);
-
     const newRow = { user_id: user.id, ...data, created_at: currentMonth, updated_at: currentMonth };
     const { data: inserted, error } = await supabase.from("acc_sales").insert([newRow]).select();
     if (error) return alert("卡具銷售新增失敗: " + error.message);
@@ -1392,12 +1453,10 @@ export default function App() {
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
     const original = accSales.find(s => s.id === data.id);
     if (!original) return;
-
-    let nextAcc = adjustAccStockLocal(original.items, 1, [...accessories]);
-    nextAcc = adjustAccStockLocal(data.items, -1, nextAcc);
+    let nextAcc  = adjustAccStockLocal(original.items, 1, [...accessories]);
+    nextAcc      = adjustAccStockLocal(data.items, -1, nextAcc);
     let nextPkgs = adjustPackagingStockLocal(original.pkg_usages, 1, [...packaging]);
-    nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, nextPkgs);
-
+    nextPkgs     = adjustPackagingStockLocal(data.pkg_usages, -1, nextPkgs);
     const { error } = await supabase.from("acc_sales").update({ ...data, updated_at: currentMonth }).eq("id", data.id);
     if (error) return alert("卡具銷售更新失敗: " + error.message);
     setAccSales(ss => ss.map(s => s.id === data.id ? { ...data, updated_at: currentMonth } : s));
@@ -1409,7 +1468,7 @@ export default function App() {
     if (!confirm("確定刪除這筆卡具銷售紀錄嗎？")) return;
     const target = accSales.find(s => s.id === id);
     if (!target) return;
-    let nextAcc = adjustAccStockLocal(target.items, 1, [...accessories]);
+    let nextAcc  = adjustAccStockLocal(target.items, 1, [...accessories]);
     let nextPkgs = adjustPackagingStockLocal(target.pkg_usages, 1, [...packaging]);
     const { error } = await supabase.from("acc_sales").delete().eq("id", id);
     if (error) return alert("刪除失敗: " + error.message);
@@ -1420,11 +1479,7 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setCards([]);
-    setPkg([]);
-    setAcc([]);
-    setAccSales([]);
+    setUser(null); setCards([]); setPkg([]); setAcc([]); setAccSales([]);
   };
 
   if (!authChecked) {
@@ -1434,10 +1489,7 @@ export default function App() {
       </div>
     );
   }
-
-  if (!user) {
-    return <AuthView onAuthSuccess={(u) => setUser(u)} />;
-  }
+  if (!user) return <AuthView onAuthSuccess={(u) => setUser(u)} />;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased">
@@ -1454,10 +1506,10 @@ export default function App() {
           </div>
           <nav className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 shadow-inner">
             {[
-              { key: "dashboard", label: "數據看板", icon: LayoutDashboard },
-              { key: "cards", label: "卡片管理", icon: CreditCard },
+              { key: "dashboard",   label: "數據看板", icon: LayoutDashboard },
+              { key: "cards",       label: "卡片管理", icon: CreditCard },
               { key: "accessories", label: "卡具管理", icon: Wrench },
-              { key: "packaging", label: "包材管理", icon: Package },
+              { key: "packaging",   label: "包材管理", icon: Package },
             ].map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${tab === t.key ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}>
                 <t.icon size={13} /><span className="hidden sm:inline">{t.label}</span>
@@ -1472,25 +1524,29 @@ export default function App() {
         <div className="mb-6 flex justify-between items-end">
           <div>
             <h1 className="text-xl font-bold text-zinc-100">
-              {tab === "dashboard" && "數據看板"}
-              {tab === "cards" && "卡片管理"}
+              {tab === "dashboard"   && "數據看板"}
+              {tab === "cards"       && "卡片管理"}
               {tab === "accessories" && "卡具管理"}
-              {tab === "packaging" && "包材管理"}
+              {tab === "packaging"   && "包材管理"}
             </h1>
             <p className="text-zinc-500 text-xs mt-0.5">
-              {tab === "dashboard" && "雲端利潤概覽與跨管道即時分析"}
-              {tab === "cards"     && `目前雲端載入有 ${cards.length} 張實體球員卡紀錄`}
-              {tab === "accessories" && `卡夾、磁吸殼等卡具庫存與獨立銷售管理`}
-              {tab === "packaging" && "追蹤店內耗材雲端餘額、加權單價與補貨紀錄"}
+              {tab === "dashboard"   && "雲端利潤概覽與跨管道即時分析"}
+              {tab === "cards"       && `目前雲端載入有 ${cards.length} 張實體球員卡紀錄`}
+              {tab === "accessories" && "卡夾、磁吸殼等卡具庫存與獨立銷售管理"}
+              {tab === "packaging"   && "追蹤店內耗材雲端餘額、加權單價與補貨紀錄"}
             </p>
           </div>
-          {dataLoading && <span className="text-xs text-violet-400 flex items-center font-mono gap-1"><RefreshCw size={11} className="animate-spin" /> Cloud Fetching…</span>}
+          {dataLoading && (
+            <span className="text-xs text-violet-400 flex items-center font-mono gap-1">
+              <RefreshCw size={11} className="animate-spin" /> Cloud Fetching…
+            </span>
+          )}
         </div>
 
-        {tab === "dashboard" && <Dashboard cards={cards} pkgMap={pkgMap} accSales={accSales} accMap={accMap} />}
-        {tab === "cards"     && <CardsPage cards={cards} packaging={packaging} onAdd={addCard} onEdit={editCard} onDelete={deleteCard} />}
+        {tab === "dashboard"   && <Dashboard cards={cards} pkgMap={pkgMap} accSales={accSales} accMap={accMap} />}
+        {tab === "cards"       && <CardsPage cards={cards} packaging={packaging} onAdd={addCard} onEdit={editCard} onDelete={deleteCard} />}
         {tab === "accessories" && <AccessoriesPage accessories={accessories} accSales={accSales} packaging={packaging} onAccUpdate={handleAccUpdate} onDeleteAcc={deleteAcc} onAddSale={addAccSale} onEditSale={editAccSale} onDeleteSale={deleteAccSale} />}
-        {tab === "packaging" && <PackagingPage packaging={packaging} onPkgUpdate={handlePkgUpdate} onDeletePkg={deletePkg} />}
+        {tab === "packaging"   && <PackagingPage packaging={packaging} onPkgUpdate={handlePkgUpdate} onDeletePkg={deletePkg} />}
       </main>
     </div>
   );
