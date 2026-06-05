@@ -371,7 +371,7 @@ function CardModal({ card, packaging, onSave, onClose }) {
     name: card?.name ?? "",
     buy_price: card?.buy_price ?? "",
     sell_price: card?.sell_price ?? "",
-    status: card?.status ?? "in_stock",
+    status: card?.status ?? "sold",
     channel: card?.channel ?? "蝦皮拍賣",
     platform_fee: card?.platform_fee ?? "",
     notes: card?.notes ?? "",
@@ -445,29 +445,12 @@ function CardModal({ card, packaging, onSave, onClose }) {
             </div>
             <div>
               <label className="text-zinc-400 text-xs font-medium mb-1 block">卡片賣出價（元）</label>
-              <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition disabled:opacity-40" placeholder="尚未賣出" value={form.sell_price} onChange={e => set("sell_price", e.target.value)} disabled={form.status === "in_stock" || form.status === "reserved"} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-zinc-400 text-xs font-medium mb-1 block">目前狀態</label>
-              <select className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" value={form.status} onChange={e => {
-                const s = e.target.value;
-                setForm(f => ({ ...f, status: s, sell_price: (s === "in_stock" || s === "reserved") ? "" : f.sell_price }));
-              }}>
-                {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-zinc-400 text-xs font-medium mb-1 block">交易通路/平台</label>
-              <select className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" value={form.channel} onChange={e => set("channel", e.target.value)}>
-                {CHANNELS.map(c => <option key={c}>{c}</option>)}
-              </select>
+              <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="0" value={form.sell_price} onChange={e => set("sell_price", e.target.value)} />
             </div>
           </div>
           <div>
             <label className="text-zinc-400 text-xs font-medium mb-1 block">平台手續費（元）</label>
-            <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} disabled={form.status === "in_stock" || form.status === "reserved"} />
+            <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} />
           </div>
           <div className="border-t border-zinc-800 pt-3">
             <div className="flex items-center justify-between mb-2">
@@ -560,15 +543,13 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
   const [page, setPage] = useState(1);
   const pkgMap = useMemo(() => Object.fromEntries(packaging.map(p => [p.id, p])), [packaging]);
 
-  // 排序：越早新增的在上面（ascending by created_at / id）
-  // 從 Supabase 撈資料時已改為 ascending，這裡再做一次本地排序保險
+  // 排序：最近的訂單在最上面（descending by created_at）
   const filtered = useMemo(() => {
     return [...cards]
       .sort((a, b) => {
-        // created_at 是 "YYYY-MM" 字串，id 是 UUID，用 id fallback
         const ka = a.created_at ?? a.id ?? "";
         const kb = b.created_at ?? b.id ?? "";
-        return ka < kb ? -1 : ka > kb ? 1 : 0;
+        return ka < kb ? 1 : ka > kb ? -1 : 0;
       })
       .filter(c => {
         const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || (c.notes || "").toLowerCase().includes(search.toLowerCase());
@@ -619,12 +600,21 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
             </div>
             {paginated.map(card => {
               const profit = calcProfit(card, pkgMap);
+              const dateLabel = (() => {
+                const d = card.created_at || "";
+                const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (m) return `${parseInt(m[2])}月${parseInt(m[3])}日`;
+                const m2 = d.match(/^(\d{4})-(\d{2})/);
+                if (m2) return `${parseInt(m2[2])}月`;
+                return "";
+              })();
               return (
                 <div key={card.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
                   {/* Mobile */}
                   <div className="lg:hidden space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
+                        {dateLabel && <span className="text-violet-400 text-xs font-mono block mb-0.5">{dateLabel}</span>}
                         <p className="text-zinc-100 font-medium text-sm leading-snug">{card.name}</p>
                         {card.notes && <p className="text-zinc-500 text-xs mt-0.5">{card.notes}</p>}
                       </div>
@@ -645,7 +635,8 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
                   </div>
                   {/* Desktop */}
                   <div className="hidden lg:grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr_auto] gap-4 items-center">
-                    <div>
+                    <div className="min-w-0">
+                      {dateLabel && <span className="text-violet-400 text-xs font-mono block mb-0.5">{dateLabel}</span>}
                       <p className="text-zinc-100 text-sm font-medium truncate">{card.name}</p>
                       {card.notes ? <p className="text-zinc-500 text-xs truncate mt-0.5">{card.notes}</p> : <span className="text-zinc-700 text-xs">—</span>}
                     </div>
@@ -1325,16 +1316,15 @@ export default function App() {
   const addCard = useCallback(async (data) => {
     if (!user) return;
     const today = new Date();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     let nextPkgs = [...packaging];
     if (data.status === "sold" || data.status === "closed") {
       nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, nextPkgs);
     }
-    const newCardRow = { user_id: user.id, ...data, created_at: currentMonth, updated_at: currentMonth };
+    const newCardRow = { user_id: user.id, ...data, created_at: dateStr, updated_at: dateStr };
     const { data: inserted, error } = await supabase.from("cards").insert([newCardRow]).select();
     if (error) return alert("雲端新增失敗: " + error.message);
-    // 插入後追加到最後（ascending 排序）
-    if (inserted) setCards(cs => [...cs, inserted[0]]);
+    if (inserted) setCards(cs => [inserted[0], ...cs]);
     await syncPackagingStockToCloud(nextPkgs);
   }, [user, packaging]);
 
