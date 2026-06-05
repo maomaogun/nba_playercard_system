@@ -203,6 +203,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
   // 圖表切換：'monthly'（每月獲利長條圖，預設）| 'daily'（每日營業額折線圖）
   const [chartMode, setChartMode] = useState("monthly");
   const [dayRange, setDayRange] = useState(14); // 折線圖顯示最近幾天
+  const [hoverIdx, setHoverIdx] = useState(null); // 折線圖滑鼠停留的資料點
 
   // 每日營業額（卡片＋卡具）
   const dailyRevenue = useMemo(() => {
@@ -309,9 +310,40 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                     if (d.revenue === 0) return null;
                     const x = dailyRevenue.length > 1 ? (i / (dailyRevenue.length - 1)) * 100 : 50;
                     const y = 100 - (d.revenue / maxDailyRev) * 92 - 4;
-                    return <circle key={d.key} cx={x} cy={y} r="1" fill="#2dd4bf" vectorEffect="non-scaling-stroke" />;
+                    return <circle key={d.key} cx={x} cy={y} r={hoverIdx === i ? 1.8 : 1} fill="#2dd4bf" vectorEffect="non-scaling-stroke" />;
+                  })}
+                  {/* 透明感應區（含 0 元的點也能 hover） */}
+                  {dailyRevenue.map((d, i) => {
+                    const x = dailyRevenue.length > 1 ? (i / (dailyRevenue.length - 1)) * 100 : 50;
+                    return (
+                      <rect
+                        key={d.key}
+                        x={x - (50 / Math.max(dailyRevenue.length, 1))}
+                        y="0"
+                        width={100 / Math.max(dailyRevenue.length, 1)}
+                        height="100"
+                        fill="transparent"
+                        onMouseEnter={() => setHoverIdx(i)}
+                        onMouseLeave={() => setHoverIdx(null)}
+                      />
+                    );
                   })}
                 </svg>
+                {/* Tooltip */}
+                {hoverIdx !== null && dailyRevenue[hoverIdx] && (() => {
+                  const d = dailyRevenue[hoverIdx];
+                  const x = dailyRevenue.length > 1 ? (hoverIdx / (dailyRevenue.length - 1)) * 100 : 50;
+                  const y = 100 - (d.revenue / maxDailyRev) * 92 - 4;
+                  return (
+                    <div
+                      className="absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-full bg-zinc-800 border border-zinc-600 rounded-lg px-2 py-1 shadow-lg whitespace-nowrap"
+                      style={{ left: `${x}%`, top: `${y}%`, marginTop: "-6px" }}
+                    >
+                      <p className="text-zinc-400 text-[10px] font-mono leading-tight">{d.label}</p>
+                      <p className="text-teal-400 text-xs font-bold font-mono leading-tight">{fmt(d.revenue)}</p>
+                    </div>
+                  );
+                })()}
               </div>
               {/* X 軸標籤（頭、中、尾） */}
               <div className="flex justify-between text-zinc-500 text-[10px] mt-1 font-mono">
