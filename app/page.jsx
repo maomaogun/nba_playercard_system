@@ -188,11 +188,11 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
       const label = `${d.getMonth() + 1}月`;
 
       const cp = soldCards
-        .filter(c => (c.updated_at || c.created_at || "").startsWith(key))
+        .filter(c => (c.created_at || c.updated_at || "").startsWith(key))
         .reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
 
       const ap = accSales
-        .filter(s => (s.updated_at || s.created_at || "").startsWith(key))
+        .filter(s => (s.created_at || s.updated_at || "").startsWith(key))
         .reduce((s, sale) => {
           const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
           const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
@@ -219,10 +219,10 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const cardRev = soldCards
-        .filter(c => (c.updated_at || c.created_at || "").startsWith(key))
+        .filter(c => (c.created_at || c.updated_at || "").startsWith(key))
         .reduce((s, c) => s + Number(c.sell_price ?? 0), 0);
       const accRev = accSales
-        .filter(s => (s.updated_at || s.created_at || "").startsWith(key))
+        .filter(s => (s.created_at || s.updated_at || "").startsWith(key))
         .reduce((s, sale) => s + Number(sale.sell_price ?? 0), 0);
       result.push({ key, label: `${d.getMonth() + 1}/${d.getDate()}`, revenue: cardRev + accRev });
     }
@@ -1479,8 +1479,7 @@ export default function App() {
 
   const editCard = useCallback(async (data) => {
     if (!user) return;
-    const today = new Date();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonth = todayISO();
     const originalCard = cards.find(c => c.id === data.id);
     if (!originalCard) return;
     const wasDeducted = originalCard.status === "sold" || originalCard.status === "closed";
@@ -1600,8 +1599,7 @@ export default function App() {
 
   const editAccSale = useCallback(async (data) => {
     if (!user) return;
-    const today = new Date();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonth = todayISO();
     const original = accSales.find(s => s.id === data.id);
     if (!original) return;
     let nextAcc  = adjustAccStockLocal(original.items, 1, [...accessories]);
