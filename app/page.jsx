@@ -211,25 +211,29 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
   const [dayRange, setDayRange] = useState(14); // 折線圖顯示最近幾天
   const [hoverIdx, setHoverIdx] = useState(null); // 折線圖滑鼠停留的資料點
 
-  // 每日營業額（卡片＋卡具）
+  // 每日收益（賣出價扣成本，卡片＋卡具）
   const dailyRevenue = useMemo(() => {
     const result = [];
     const now = new Date();
     for (let i = dayRange - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const cardRev = soldCards
+      const cardProfitDay = soldCards
         .filter(c => (c.created_at || c.updated_at || "").startsWith(key))
-        .reduce((s, c) => s + Number(c.sell_price ?? 0), 0);
-      const accRev = accSales
+        .reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
+      const accProfitDay = accSales
         .filter(s => (s.created_at || s.updated_at || "").startsWith(key))
-        .reduce((s, sale) => s + Number(sale.sell_price ?? 0), 0);
-      result.push({ key, label: `${d.getMonth() + 1}/${d.getDate()}`, revenue: cardRev + accRev });
+        .reduce((s, sale) => {
+          const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
+          const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
+          return s + (sale.sell_price ?? 0) - cogs - pkg - (sale.platform_fee ?? 0);
+        }, 0);
+      result.push({ key, label: `${d.getMonth() + 1}/${d.getDate()}`, revenue: cardProfitDay + accProfitDay });
     }
     return result;
-  }, [soldCards, accSales, dayRange]);
+  }, [soldCards, accSales, pkgMap, accMap, dayRange]);
 
-  const maxDailyRev = Math.max(...dailyRevenue.map(d => d.revenue), 1);
+  const maxDailyRev = Math.max(...dailyRevenue.map(d => Math.abs(d.revenue)), 1);
   const dailyTotal = dailyRevenue.reduce((s, d) => s + d.revenue, 0);
 
   // 右側面板：球員卡 vs 卡具的營業額與獲利進度條
@@ -270,7 +274,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <h3 className="text-zinc-200 font-semibold mb-4 flex items-center gap-2">
             <TrendingUp size={16} className="text-violet-400" />
-            {chartMode === "monthly" ? "每月獲利趨勢（卡片＋卡具）" : "每日營業額趨勢（卡片＋卡具）"}
+            {chartMode === "monthly" ? "每月獲利趨勢（卡片＋卡具）" : "每日收益趨勢（卡片＋卡具）"}
           </h3>
 
           {chartMode === "monthly" ? (
@@ -294,7 +298,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
           ) : (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-zinc-500 text-xs">最近 {dayRange} 天 · 總營業額 <span className="text-teal-400 font-mono">{fmt(dailyTotal)}</span></span>
+                <span className="text-zinc-500 text-xs">最近 {dayRange} 天 · 總收益 <span className="text-teal-400 font-mono">{fmt(dailyTotal)}</span></span>
                 <span className="text-zinc-600 text-[10px] font-mono">高峰 {fmt(maxDailyRev)}</span>
               </div>
               <div className="relative h-48">
@@ -386,7 +390,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
               onClick={() => setChartMode("daily")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${chartMode === "daily" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}
             >
-              <TrendingUp size={12} /> 每日營業額折線圖
+              <TrendingUp size={12} /> 每日收益折線圖
             </button>
           </div>
         </div>
