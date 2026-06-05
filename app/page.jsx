@@ -200,6 +200,31 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
 
   const maxProfit = Math.max(...monthlyProfit.map(m => Math.abs(m.profit)), 1);
 
+  // 圖表切換：'monthly'（每月獲利長條圖，預設）| 'daily'（每日營業額折線圖）
+  const [chartMode, setChartMode] = useState("monthly");
+  const [dayRange, setDayRange] = useState(14); // 折線圖顯示最近幾天
+
+  // 每日營業額（卡片＋卡具）
+  const dailyRevenue = useMemo(() => {
+    const result = [];
+    const now = new Date();
+    for (let i = dayRange - 1; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const cardRev = soldCards
+        .filter(c => (c.updated_at || c.created_at || "").startsWith(key))
+        .reduce((s, c) => s + Number(c.sell_price ?? 0), 0);
+      const accRev = accSales
+        .filter(s => (s.updated_at || s.created_at || "").startsWith(key))
+        .reduce((s, sale) => s + Number(sale.sell_price ?? 0), 0);
+      result.push({ key, label: `${d.getMonth() + 1}/${d.getDate()}`, revenue: cardRev + accRev });
+    }
+    return result;
+  }, [soldCards, accSales, dayRange]);
+
+  const maxDailyRev = Math.max(...dailyRevenue.map(d => d.revenue), 1);
+  const dailyTotal = dailyRevenue.reduce((s, d) => s + d.revenue, 0);
+
   // 右側面板：球員卡 vs 卡具的營業額與獲利進度條
   const grandRevenue = cardRevenue + accRevenue;
   const grandRevMax  = Math.max(grandRevenue, 1);
@@ -234,31 +259,98 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
 
       {/* 第三行：圖表 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 左：每月趨勢 */}
+        {/* 左：趨勢圖（可切換每月長條 / 每日折線） */}
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <h3 className="text-zinc-200 font-semibold mb-4 flex items-center gap-2">
-            <TrendingUp size={16} className="text-violet-400" /> 每月獲利趨勢（卡片＋卡具）
+            <TrendingUp size={16} className="text-violet-400" />
+            {chartMode === "monthly" ? "每月獲利趨勢（卡片＋卡具）" : "每日營業額趨勢（卡片＋卡具）"}
           </h3>
-          <div className="flex items-end gap-2 h-40 pt-4">
-            {monthlyProfit.map((m) => {
-              const pct = (Math.abs(m.profit) / maxProfit) * 100;
-              const isPos = m.profit >= 0;
-              return (
-                <div key={m.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
-                  <span className={`text-[10px] font-bold ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
-                    {m.profit !== 0 ? `${isPos ? "+" : ""}${m.profit}` : ""}
-                  </span>
-                  <div className="w-full flex flex-col justify-end" style={{ height: "100px" }}>
-                    <div className={`w-full rounded-t-md transition-all ${isPos ? "bg-violet-600" : "bg-rose-600"}`} style={{ height: `${Math.max(pct, m.profit !== 0 ? 4 : 0)}%` }} />
+
+          {chartMode === "monthly" ? (
+            <div className="flex items-end gap-2 h-40 pt-4">
+              {monthlyProfit.map((m) => {
+                const pct = (Math.abs(m.profit) / maxProfit) * 100;
+                const isPos = m.profit >= 0;
+                return (
+                  <div key={m.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                    <span className={`text-[10px] font-bold ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
+                      {m.profit !== 0 ? `${isPos ? "+" : ""}${m.profit}` : ""}
+                    </span>
+                    <div className="w-full flex flex-col justify-end" style={{ height: "100px" }}>
+                      <div className={`w-full rounded-t-md transition-all ${isPos ? "bg-violet-600" : "bg-rose-600"}`} style={{ height: `${Math.max(pct, m.profit !== 0 ? 4 : 0)}%` }} />
+                    </div>
+                    <span className="text-zinc-500 text-xs mt-1">{m.label}</span>
                   </div>
-                  <span className="text-zinc-500 text-xs mt-1">{m.label}</span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-zinc-500 text-xs">最近 {dayRange} 天 · 總營業額 <span className="text-teal-400 font-mono">{fmt(dailyTotal)}</span></span>
+                <span className="text-zinc-600 text-[10px] font-mono">高峰 {fmt(maxDailyRev)}</span>
+              </div>
+              <div className="relative h-40">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                  {/* 折線 */}
+                  <polyline
+                    fill="none"
+                    stroke="#14b8a6"
+                    strokeWidth="0.8"
+                    vectorEffect="non-scaling-stroke"
+                    points={dailyRevenue.map((d, i) => {
+                      const x = dailyRevenue.length > 1 ? (i / (dailyRevenue.length - 1)) * 100 : 50;
+                      const y = 100 - (d.revenue / maxDailyRev) * 92 - 4;
+                      return `${x},${y}`;
+                    }).join(" ")}
+                  />
+                  {/* 資料點 */}
+                  {dailyRevenue.map((d, i) => {
+                    if (d.revenue === 0) return null;
+                    const x = dailyRevenue.length > 1 ? (i / (dailyRevenue.length - 1)) * 100 : 50;
+                    const y = 100 - (d.revenue / maxDailyRev) * 92 - 4;
+                    return <circle key={d.key} cx={x} cy={y} r="1" fill="#2dd4bf" vectorEffect="non-scaling-stroke" />;
+                  })}
+                </svg>
+              </div>
+              {/* X 軸標籤（頭、中、尾） */}
+              <div className="flex justify-between text-zinc-500 text-[10px] mt-1 font-mono">
+                <span>{dailyRevenue[0]?.label}</span>
+                {dayRange > 4 && <span>{dailyRevenue[Math.floor(dailyRevenue.length / 2)]?.label}</span>}
+                <span>{dailyRevenue[dailyRevenue.length - 1]?.label}</span>
+              </div>
+              {/* 範圍縮放滑桿（往左放大看最近幾天，往右拉遠看數週/數月） */}
+              <div className="mt-4 flex items-center gap-3">
+                <span className="text-zinc-500 text-[10px] whitespace-nowrap">放大</span>
+                <input
+                  type="range" min="3" max="180" step="1" value={dayRange}
+                  onChange={e => setDayRange(Number(e.target.value))}
+                  className="flex-1 accent-teal-500"
+                />
+                <span className="text-zinc-500 text-[10px] whitespace-nowrap">拉遠</span>
+              </div>
+            </div>
+          )}
+
           {soldCards.length === 0 && accSales.length === 0 && (
             <p className="text-center text-zinc-600 text-sm mt-4">尚無已售出的交易紀錄</p>
           )}
+
+          {/* 切換選項 */}
+          <div className="flex justify-center gap-1 mt-4 pt-3 border-t border-zinc-800">
+            <button
+              onClick={() => setChartMode("monthly")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${chartMode === "monthly" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <BarChart3 size={12} /> 每月獲利長條圖
+            </button>
+            <button
+              onClick={() => setChartMode("daily")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${chartMode === "daily" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <TrendingUp size={12} /> 每日營業額折線圖
+            </button>
+          </div>
         </div>
 
         {/* 右：球員卡 vs 卡具 進度條比較 */}
