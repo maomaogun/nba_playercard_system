@@ -16,6 +16,12 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ─── uid ─────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+// 取得今天的 YYYY-MM-DD（本地時區）
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmt = (n, decimals = 0) => {
   if (n === null || n === undefined || isNaN(n)) return "—";
@@ -499,6 +505,7 @@ function CardModal({ card, packaging, onSave, onClose }) {
     channel: card?.channel ?? "蝦皮拍賣",
     platform_fee: card?.platform_fee ?? "",
     notes: card?.notes ?? "",
+    sale_date: (card?.created_at || "").slice(0, 10) || todayISO(),
     pkg_usages: card?.pkg_usages ? JSON.parse(JSON.stringify(card.pkg_usages)) : [],
   }));
 
@@ -536,9 +543,11 @@ function CardModal({ card, packaging, onSave, onClose }) {
       unit_cost_snap: pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0,
       qty: Math.max(1, Number(u.qty) || 1),
     }));
+    const { sale_date, ...rest } = form;
     onSave({
       ...card,
-      ...form,
+      ...rest,
+      created_at: sale_date || todayISO(),
       pkg_usages: snappedUsages,
       buy_price: buyNum,
       sell_price: form.status === "sold" || form.status === "closed" ? sellNum : null,
@@ -561,6 +570,10 @@ function CardModal({ card, packaging, onSave, onClose }) {
           <div>
             <label className="text-zinc-400 text-xs font-medium mb-1 block">卡片名稱 *</label>
             <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" placeholder="例如：Wembanyama 2023 Prizm Base RC" value={form.name} onChange={e => set("name", e.target.value)} />
+          </div>
+          <div>
+            <label className="text-zinc-400 text-xs font-medium mb-1 block">交易日期</label>
+            <input type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-violet-500 transition" value={form.sale_date} onChange={e => set("sale_date", e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -954,6 +967,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
     channel: sale?.channel ?? "蝦皮拍賣",
     platform_fee: sale?.platform_fee ?? "",
     sell_price: sale?.sell_price ?? "",
+    sale_date: (sale?.created_at || "").slice(0, 10) || todayISO(),
     pkg_usages: sale?.pkg_usages ? JSON.parse(JSON.stringify(sale.pkg_usages)) : [],
     items: sale?.items ? JSON.parse(JSON.stringify(sale.items)) : [],
   }));
@@ -1025,7 +1039,8 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
       unit_cost_snap: pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0,
       qty: Math.max(1, Number(u.qty) || 1),
     }));
-    onSave({ ...sale, ...form, items: snappedItems, pkg_usages: snappedPkgs, sell_price: sellNum, platform_fee: feeNum });
+    const { sale_date, ...rest } = form;
+    onSave({ ...sale, ...rest, created_at: sale_date || todayISO(), items: snappedItems, pkg_usages: snappedPkgs, sell_price: sellNum, platform_fee: feeNum });
   };
 
   return (
@@ -1077,9 +1092,15 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
               </select>
             </div>
           </div>
-          <div>
-            <label className="text-zinc-400 text-xs font-medium mb-1 block">平台手續費（元）</label>
-            <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-zinc-400 text-xs font-medium mb-1 block">平台手續費（元）</label>
+              <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-zinc-400 text-xs font-medium mb-1 block">交易日期</label>
+              <input type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" value={form.sale_date} onChange={e => set("sale_date", e.target.value)} />
+            </div>
           </div>
           <div className="border-t border-zinc-800 pt-3">
             <div className="flex items-center justify-between mb-2">
@@ -1244,7 +1265,11 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
               <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
                 <span>品項明細</span><span>成本合計</span><span>售出金額</span><span>獲利</span><span>操作</span>
               </div>
-              {accSales.map(sale => {
+              {[...accSales].sort((a, b) => {
+                const ka = a.created_at ?? a.id ?? "";
+                const kb = b.created_at ?? b.id ?? "";
+                return ka < kb ? 1 : ka > kb ? -1 : 0;
+              }).map(sale => {
                 const cogsCost = (sale.items || []).reduce((s, it) => s + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
                 const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
                 const profit   = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
@@ -1445,7 +1470,7 @@ export default function App() {
     if (data.status === "sold" || data.status === "closed") {
       nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, nextPkgs);
     }
-    const newCardRow = { user_id: user.id, ...data, created_at: dateStr, updated_at: dateStr };
+    const newCardRow = { user_id: user.id, ...data, created_at: data.created_at || dateStr, updated_at: dateStr };
     const { data: inserted, error } = await supabase.from("cards").insert([newCardRow]).select();
     if (error) return alert("雲端新增失敗: " + error.message);
     if (inserted) setCards(cs => [inserted[0], ...cs]);
@@ -1565,7 +1590,7 @@ export default function App() {
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     let nextAcc  = adjustAccStockLocal(data.items, -1, [...accessories]);
     let nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, [...packaging]);
-    const newRow = { user_id: user.id, ...data, created_at: dateStr, updated_at: dateStr };
+    const newRow = { user_id: user.id, ...data, created_at: data.created_at || dateStr, updated_at: dateStr };
     const { data: inserted, error } = await supabase.from("acc_sales").insert([newRow]).select();
     if (error) return alert("卡具銷售新增失敗: " + error.message);
     if (inserted) setAccSales(ss => [inserted[0], ...ss]);
