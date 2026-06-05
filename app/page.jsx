@@ -846,10 +846,14 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const pkgMap = useMemo(() => Object.fromEntries(packaging.map(p => [p.id, p])), [packaging]);
   const accMap = useMemo(() => Object.fromEntries(accessories.map(a => [a.id, a])), [accessories]);
+  const sortedAccessories = useMemo(
+    () => [...accessories].sort((a, b) => a.name.localeCompare(b.name, "zh-TW", { numeric: true, sensitivity: "base" })),
+    [accessories]
+  );
 
   const addItem = () => {
-    if (accessories.length === 0) return alert("請先在卡具庫存頁面新增卡具品項");
-    const first = accessories[0];
+    if (sortedAccessories.length === 0) return alert("請先在卡具庫存頁面新增卡具品項");
+    const first = sortedAccessories[0];
     setForm(f => ({ ...f, items: [...f.items, { id: uid(), acc_id: first.id, qty: 1, unit_cost_snap: first.unit_cost }] }));
   };
   const rmItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, j) => j !== i) }));
@@ -931,7 +935,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
               {form.items.map((it, i) => (
                 <div key={it.id} className="flex items-center gap-2 bg-zinc-900/50 p-2 border border-zinc-800 rounded-xl">
                   <select className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg p-1.5 text-zinc-100 text-xs focus:outline-none" value={it.acc_id} onChange={e => setItem(i, "acc_id", e.target.value)}>
-                    {accessories.map(a => <option key={a.id} value={a.id}>{a.name}（庫存 {a.stock} 個）</option>)}
+                    {sortedAccessories.map(a => <option key={a.id} value={a.id}>{a.name}（庫存 {a.stock} 個）</option>)}
                   </select>
                   <div className="flex items-center gap-1">
                     <input type="number" min="1" className="w-14 bg-zinc-800 border border-zinc-700 rounded-lg p-1.5 text-zinc-100 text-xs text-center" value={it.qty} onChange={e => setItem(i, "qty", Math.max(1, parseInt(e.target.value) || 1))} />
