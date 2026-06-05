@@ -315,7 +315,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                   {dailyRevenue.map((d, i) => {
                     if (d.revenue === 0) return null;
                     const x = dailyRevenue.length > 1 ? (i / (dailyRevenue.length - 1)) * 100 : 50;
-                    const y = 100 - (d.revenue / maxDailyRev) * 92 - 4;
+                    const y = 96 - (d.revenue / maxDailyRev) * 84;
                     return <circle key={d.key} cx={x} cy={y} r={hoverIdx === i ? 1.8 : 1} fill="#2dd4bf" vectorEffect="non-scaling-stroke" />;
                   })}
                   {/* 透明感應區（含 0 元的點也能 hover） */}
@@ -339,7 +339,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                 {hoverIdx !== null && dailyRevenue[hoverIdx] && (() => {
                   const d = dailyRevenue[hoverIdx];
                   const x = dailyRevenue.length > 1 ? (hoverIdx / (dailyRevenue.length - 1)) * 100 : 50;
-                  const y = 100 - (d.revenue / maxDailyRev) * 92 - 4;
+                  const y = 96 - (d.revenue / maxDailyRev) * 84;
                   return (
                     <div
                       className="absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-full bg-zinc-800 border border-zinc-600 rounded-lg px-2 py-1 shadow-lg whitespace-nowrap"
