@@ -371,7 +371,7 @@ function CardModal({ card, packaging, onSave, onClose }) {
     name: card?.name ?? "",
     buy_price: card?.buy_price ?? "",
     sell_price: card?.sell_price ?? "",
-    status: card?.status ?? "sold",
+    status: card?.status ?? "closed",
     channel: card?.channel ?? "蝦皮拍賣",
     platform_fee: card?.platform_fee ?? "",
     notes: card?.notes ?? "",
@@ -629,7 +629,7 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
                       <div><span className="text-zinc-500 block">利潤</span>{profit !== null ? <span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span> : <span className="text-zinc-600">—</span>}</div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <StatusBadge status={card.status} />
+                      <StatusBadge status="closed" />
                       {card.channel && <span className="text-zinc-500 text-xs bg-zinc-800 px-2 py-0.5 rounded-md">{card.channel}</span>}
                     </div>
                   </div>
@@ -645,7 +645,7 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
                     <span className={`text-sm font-mono font-bold ${profit === null ? "text-zinc-600" : profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                       {profit === null ? "—" : `${profit >= 0 ? "+" : ""}${fmt(profit, 1)}`}
                     </span>
-                    <StatusBadge status={card.status} />
+                    <StatusBadge status="closed" />
                     <div className="flex gap-1.5">
                       <button onClick={() => { setModalCard(card); setShowModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
                       <button onClick={() => onDelete(card.id)} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-rose-950 flex items-center justify-center transition text-zinc-500 hover:text-rose-400"><Trash2 size={13} /></button>
