@@ -291,7 +291,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                 <span className="text-zinc-500 text-xs">最近 {dayRange} 天 · 總營業額 <span className="text-teal-400 font-mono">{fmt(dailyTotal)}</span></span>
                 <span className="text-zinc-600 text-[10px] font-mono">高峰 {fmt(maxDailyRev)}</span>
               </div>
-              <div className="relative h-40">
+              <div className="relative h-48">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
                   {/* 折線 */}
                   <polyline
@@ -301,7 +301,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                     vectorEffect="non-scaling-stroke"
                     points={dailyRevenue.map((d, i) => {
                       const x = dailyRevenue.length > 1 ? (i / (dailyRevenue.length - 1)) * 100 : 50;
-                      const y = 100 - (d.revenue / maxDailyRev) * 92 - 4;
+                      const y = 96 - (d.revenue / maxDailyRev) * 84;
                       return `${x},${y}`;
                     }).join(" ")}
                   />
@@ -351,11 +351,11 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                 {dayRange > 4 && <span>{dailyRevenue[Math.floor(dailyRevenue.length / 2)]?.label}</span>}
                 <span>{dailyRevenue[dailyRevenue.length - 1]?.label}</span>
               </div>
-              {/* 範圍縮放滑桿（往左放大看最近幾天，往右拉遠看數週/數月） */}
-              <div className="mt-4 flex items-center gap-3">
+              {/* 範圍縮放滑桿（往左放大看最近幾天，往右拉遠最多一個月） */}
+              <div className="mt-2 flex items-center gap-3">
                 <span className="text-zinc-500 text-[10px] whitespace-nowrap">放大</span>
                 <input
-                  type="range" min="3" max="180" step="1" value={dayRange}
+                  type="range" min="3" max="30" step="1" value={dayRange}
                   onChange={e => setDayRange(Number(e.target.value))}
                   className="flex-1 accent-teal-500"
                 />
@@ -365,11 +365,11 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
           )}
 
           {soldCards.length === 0 && accSales.length === 0 && (
-            <p className="text-center text-zinc-600 text-sm mt-4">尚無已售出的交易紀錄</p>
+            <p className="text-center text-zinc-600 text-sm mt-3">尚無已售出的交易紀錄</p>
           )}
 
           {/* 切換選項 */}
-          <div className="flex justify-center gap-1 mt-4 pt-3 border-t border-zinc-800">
+          <div className="flex justify-center gap-1 mt-3 pt-2 border-t border-zinc-800">
             <button
               onClick={() => setChartMode("monthly")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${chartMode === "monthly" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}
