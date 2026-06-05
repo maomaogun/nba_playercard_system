@@ -1,18 +1,23 @@
-"use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   LayoutDashboard, Package, CreditCard, Plus, Pencil, Trash2,
   TrendingUp, DollarSign, BarChart3, X, AlertTriangle, CheckCircle2, 
   Clock, Archive, ShoppingBag, RefreshCw, Boxes, PlusCircle, 
-  MinusCircle, Search, Filter, Star, LogIn, LogOut, Lock, Mail, Loader2
+  MinusCircle, Search, Filter, Star, LogIn, LogOut, Lock, Mail, Loader2,
+  Wrench, ShoppingCart, Tag
 } from "lucide-react";
 
 // ─── 填入你的 SUPABASE 雲端連結資訊 ─────────────────────────────────────────────
+// ⚠️ 請將下方 SUPABASE_ANON_KEY 換成你在 Supabase 後台
+//    Settings → API → "anon public" 欄位的完整 JWT（eyJ... 開頭）
 const SUPABASE_URL = "https://mwrwkjldppabqerdihcm.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_Zf8k2Y0kmAKG5csrk-bRNg_bf9Dyp30";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13cndramxkcHBhYnFlcmRpaGNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwODMzODQsImV4cCI6MjA5NDY1OTM4NH0.JGB8aQfkO3GnG_abY3t4CdikwnPK89sHzzcZ28tIvms"; // ← 換成正確的 anon JWT key
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─── uid 工具函式（全域唯一 ID 產生器）────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n) => {
@@ -154,7 +159,7 @@ function Dashboard({ cards, pkgMap }) {
   const totalProfit  = sold.reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
   const roi = totalBuyCost ? (totalProfit / totalBuyCost) * 100 : 0;
 
-  const monthlyProfit = useMemo(() => {
+  const monthlyProfit = (() => {
     const result = [];
     const now = new Date();
     for (let i = 5; i >= 0; i--) {
@@ -171,18 +176,18 @@ function Dashboard({ cards, pkgMap }) {
       result.push({ key, label, profit });
     }
     return result;
-  }, [sold, pkgMap]);
+  })();
 
   const maxProfit = Math.max(...monthlyProfit.map(m => Math.abs(m.profit)), 1);
 
-  const channelData = useMemo(() => {
+  const channelData = (() => {
     const channelMap = {};
     sold.forEach(c => {
       const ch = c.channel || "其他";
       channelMap[ch] = (channelMap[ch] ?? 0) + (calcProfit(c, pkgMap) ?? 0);
     });
     return Object.entries(channelMap).sort((a, b) => b[1] - a[1]);
-  }, [sold, pkgMap]);
+  })();
 
   const totalChProfit = channelData.reduce((s, [, v]) => s + Math.max(v, 0), 0) || 1;
   const CHIP_COLORS = ["bg-violet-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-pink-500"];
@@ -406,20 +411,27 @@ function CardModal({ card, packaging, onSave, onClose }) {
 }
 
 // ─── Cards Page ───────────────────────────────────────────────────────────────
+const CARDS_PAGE_SIZE = 15;
+
 function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [modalCard, setModalCard] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [page, setPage] = useState(1);
   const pkgMap = useMemo(() => Object.fromEntries(packaging.map(p => [p.id, p])), [packaging]);
 
   const filtered = useMemo(() => {
+    setPage(1);
     return cards.filter(c => {
       const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || (c.notes || "").toLowerCase().includes(search.toLowerCase());
       const matchStatus = filterStatus === "all" || c.status === filterStatus;
       return matchSearch && matchStatus;
     });
   }, [cards, search, filterStatus]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / CARDS_PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * CARDS_PAGE_SIZE, page * CARDS_PAGE_SIZE);
 
   return (
     <div className="space-y-4">
@@ -450,7 +462,7 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
           <div className="hidden lg:grid grid-cols-[2.5fr_1fr_1fr_1fr_1.2fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
             <span>卡片明細</span><span>買入成本</span><span>出售價格</span><span>每筆訂單獲利</span><span>狀態</span><span>操作</span>
           </div>
-          {filtered.map(card => {
+          {paginated.map(card => {
             const profit = calcProfit(card, pkgMap);
             return (
               <div key={card.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
@@ -497,6 +509,14 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium disabled:opacity-30 hover:bg-zinc-700 transition">上一頁</button>
+          <span className="text-zinc-500 text-xs">第 <span className="text-zinc-200 font-bold">{page}</span> / {totalPages} 頁（共 {filtered.length} 筆）</span>
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs font-medium disabled:opacity-30 hover:bg-zinc-700 transition">下一頁</button>
         </div>
       )}
 
@@ -580,6 +600,479 @@ function PkgModal({ pkg, onSave, onClose }) {
   );
 }
 
+// ─── Card Accessories (卡具) Page ──────────────────────────────────────────────
+function AccessoryModal({ acc, onSave, onClose }) {
+  const isRestock = !!acc?.id;
+  const [form, setForm] = useState(
+    isRestock
+      ? { qty_add: "", total_cost: "" }
+      : { name: "", stock: "", unit_cost: "" }
+  );
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const newUnitCost =
+    isRestock && form.qty_add && form.total_cost
+      ? (Number(form.total_cost) / Number(form.qty_add)).toFixed(1)
+      : null;
+
+  const handleSave = () => {
+    if (isRestock) {
+      if (!form.qty_add || !form.total_cost) return alert("請填寫補貨數量與購入總額");
+      onSave({ type: "restock", id: acc.id, qty_add: Number(form.qty_add), total_cost: Number(form.total_cost) });
+    } else {
+      if (!form.name.trim() || form.stock === "" || form.unit_cost === "") return alert("請完整填寫卡具欄位");
+      onSave({ type: "new", name: form.name, stock: Number(form.stock), unit_cost: Number(form.unit_cost) });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="relative z-10 w-full sm:max-w-md bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+          <h2 className="text-zinc-100 font-semibold text-base flex items-center gap-2">
+            <Wrench size={16} className="text-teal-400" />
+            {isRestock ? `卡具批次進貨：${acc.name}` : "新增卡具品項"}
+          </h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center hover:bg-zinc-700 transition"><X size={15} className="text-zinc-400" /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          {isRestock ? (
+            <>
+              <div>
+                <label className="text-zinc-400 text-xs font-medium mb-1 block">補貨增加數量（個）</label>
+                <input type="number" min="1" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none" placeholder="10" value={form.qty_add} onChange={e => set("qty_add", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-zinc-400 text-xs font-medium mb-1 block">本次批次進貨總費用（元）</label>
+                <input type="number" min="0" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none" placeholder="500" value={form.total_cost} onChange={e => set("total_cost", e.target.value)} />
+              </div>
+              {newUnitCost && (
+                <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3 text-sm flex justify-between items-center">
+                  <span className="text-zinc-400">系統試算此批均價成本：</span>
+                  <span className="text-teal-400 font-bold font-mono">{fmt(Number(newUnitCost))} /個</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="text-zinc-400 text-xs font-medium mb-1 block">卡具品項名稱／規格</label>
+                <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none" placeholder="例如：35pt 一次性卡夾、磁吸硬殼、9格活頁…" value={form.name} onChange={e => set("name", e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-zinc-400 text-xs font-medium mb-1 block">現有初始庫存量</label>
+                  <input type="number" min="0" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none" placeholder="0" value={form.stock} onChange={e => set("stock", e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-zinc-400 text-xs font-medium mb-1 block">單個進貨成本（元）</label>
+                  <input type="number" min="0" step="0.1" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none" placeholder="10" value={form.unit_cost} onChange={e => set("unit_cost", e.target.value)} />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="p-5 border-t border-zinc-800 flex gap-3 bg-zinc-950 rounded-b-2xl">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:bg-zinc-800 transition">取消</button>
+          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium transition">確認存檔</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Accessory Sale Modal ──────────────────────────────────────────────────────
+function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
+  const [form, setForm] = useState(() => ({
+    buyer_note: sale?.buyer_note ?? "",
+    channel: sale?.channel ?? "蝦皮拍賣",
+    platform_fee: sale?.platform_fee ?? "",
+    sell_price: sale?.sell_price ?? "",
+    pkg_usages: sale?.pkg_usages ? JSON.parse(JSON.stringify(sale.pkg_usages)) : [],
+    items: sale?.items ? JSON.parse(JSON.stringify(sale.items)) : [],
+  }));
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const pkgMap = useMemo(() => Object.fromEntries(packaging.map(p => [p.id, p])), [packaging]);
+  const accMap = useMemo(() => Object.fromEntries(accessories.map(a => [a.id, a])), [accessories]);
+
+  // Items management
+  const addItem = () => {
+    if (accessories.length === 0) return alert("請先在卡具庫存頁面新增卡具品項");
+    const first = accessories[0];
+    setForm(f => ({ ...f, items: [...f.items, { id: uid(), acc_id: first.id, qty: 1, unit_cost_snap: first.unit_cost }] }));
+  };
+  const rmItem = (i) => setForm(f => ({ ...f, items: f.items.filter((_, j) => j !== i) }));
+  const setItem = (i, field, val) => setForm(f => ({
+    ...f,
+    items: f.items.map((it, j) => {
+      if (j !== i) return it;
+      if (field === "acc_id") {
+        const a = accessories.find(a => a.id === val);
+        return { ...it, acc_id: val, unit_cost_snap: a?.unit_cost ?? 0 };
+      }
+      return { ...it, [field]: val };
+    })
+  }));
+
+  // Packaging management
+  const addPkg = () => {
+    if (packaging.length === 0) return alert("請先至包材管理頁面建立包材規格");
+    setForm(f => ({ ...f, pkg_usages: [...f.pkg_usages, { id: uid(), pkg_id: packaging[0].id, qty: 1, unit_cost_snap: packaging[0].unit_cost }] }));
+  };
+  const rmPkg = (i) => setForm(f => ({ ...f, pkg_usages: f.pkg_usages.filter((_, j) => j !== i) }));
+  const setPkgUsage = (i, field, val) => setForm(f => ({
+    ...f,
+    pkg_usages: f.pkg_usages.map((u, j) => {
+      if (j !== i) return u;
+      if (field === "pkg_id") {
+        const p = packaging.find(p => p.id === val);
+        return { ...u, pkg_id: val, unit_cost_snap: p?.unit_cost ?? 0 };
+      }
+      return { ...u, [field]: val };
+    })
+  }));
+
+  const totalCostOfGoods = form.items.reduce((s, it) => {
+    const cost = accMap[it.acc_id]?.unit_cost ?? it.unit_cost_snap ?? 0;
+    return s + cost * (Number(it.qty) || 0);
+  }, 0);
+  const totalPkgCost = form.pkg_usages.reduce((s, u) => {
+    const cost = pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0;
+    return s + cost * (Number(u.qty) || 0);
+  }, 0);
+  const sellNum = Number(form.sell_price) || 0;
+  const feeNum = Number(form.platform_fee) || 0;
+  const netProfit = sellNum - totalCostOfGoods - totalPkgCost - feeNum;
+
+  const handleSave = () => {
+    if (form.items.length === 0) return alert("請至少選擇一項卡具");
+    const snappedItems = form.items.map(it => ({
+      ...it,
+      unit_cost_snap: accMap[it.acc_id]?.unit_cost ?? it.unit_cost_snap ?? 0,
+      qty: Math.max(1, Number(it.qty) || 1),
+    }));
+    const snappedPkgs = form.pkg_usages.map(u => ({
+      ...u,
+      unit_cost_snap: pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0,
+      qty: Math.max(1, Number(u.qty) || 1),
+    }));
+    onSave({
+      ...sale,
+      ...form,
+      items: snappedItems,
+      pkg_usages: snappedPkgs,
+      sell_price: sellNum,
+      platform_fee: feeNum,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="relative z-10 w-full sm:max-w-lg bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+          <h2 className="text-zinc-100 font-semibold text-base flex items-center gap-2">
+            <ShoppingCart size={16} className="text-teal-400" />
+            {sale?.id ? "編輯卡具銷售紀錄" : "新增卡具銷售訂單"}
+          </h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center hover:bg-zinc-700 transition"><X size={15} className="text-zinc-400" /></button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {/* Items */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-zinc-300 text-sm font-semibold flex items-center gap-1.5"><Tag size={13} className="text-teal-400"/>銷售卡具品項 *</label>
+              <button onClick={addItem} className="flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 transition"><PlusCircle size={13} /> 新增品項</button>
+            </div>
+            {form.items.length === 0 && <p className="text-zinc-600 text-xs py-1">尚未選擇任何卡具品項</p>}
+            <div className="space-y-2">
+              {form.items.map((it, i) => (
+                <div key={it.id} className="flex items-center gap-2 bg-zinc-900/50 p-2 border border-zinc-800 rounded-xl">
+                  <select className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg p-1.5 text-zinc-100 text-xs focus:outline-none" value={it.acc_id} onChange={e => setItem(i, "acc_id", e.target.value)}>
+                    {accessories.map(a => <option key={a.id} value={a.id}>{a.name}（庫存 {a.stock} 個）</option>)}
+                  </select>
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="1" className="w-14 bg-zinc-800 border border-zinc-700 rounded-lg p-1.5 text-zinc-100 text-xs text-center" value={it.qty} onChange={e => setItem(i, "qty", Math.max(1, parseInt(e.target.value) || 1))} />
+                    <span className="text-zinc-500 text-xs">個</span>
+                  </div>
+                  <span className="text-zinc-400 text-xs font-mono min-w-[50px] text-right">{fmt((accMap[it.acc_id]?.unit_cost ?? it.unit_cost_snap ?? 0) * (Number(it.qty) || 1))}</span>
+                  <button onClick={() => rmItem(i)} className="text-rose-500 hover:text-rose-400 p-1"><MinusCircle size={15} /></button>
+                </div>
+              ))}
+            </div>
+            {form.items.length > 0 && (
+              <p className="text-right text-xs text-zinc-500 mt-1.5">卡具成本合計：<span className="text-zinc-300 font-mono">{fmt(totalCostOfGoods)}</span></p>
+            )}
+          </div>
+
+          {/* Sale price + channel */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-zinc-400 text-xs font-medium mb-1 block">實際售出總金額（元）</label>
+              <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="0" value={form.sell_price} onChange={e => set("sell_price", e.target.value)} />
+            </div>
+            <div>
+              <label className="text-zinc-400 text-xs font-medium mb-1 block">交易通路/平台</label>
+              <select className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" value={form.channel} onChange={e => set("channel", e.target.value)}>
+                {CHANNELS.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-zinc-400 text-xs font-medium mb-1 block">平台手續費（元）</label>
+            <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} />
+          </div>
+
+          {/* Packaging */}
+          <div className="border-t border-zinc-800 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-zinc-400 text-xs font-medium block">使用包材（選填）</label>
+              <button onClick={addPkg} className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition"><PlusCircle size={13} /> 增加包材</button>
+            </div>
+            {form.pkg_usages.length === 0 && <p className="text-zinc-600 text-xs py-1">此訂單未記錄包材消耗</p>}
+            <div className="space-y-2">
+              {form.pkg_usages.map((u, i) => (
+                <div key={u.id} className="flex items-center gap-2 bg-zinc-900/50 p-2 border border-zinc-800 rounded-xl">
+                  <select className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg p-1.5 text-zinc-100 text-xs focus:outline-none" value={u.pkg_id} onChange={e => setPkgUsage(i, "pkg_id", e.target.value)}>
+                    {packaging.map(p => <option key={p.id} value={p.id}>{p.name}（庫存 {p.stock} 個）</option>)}
+                  </select>
+                  <div className="flex items-center gap-1">
+                    <input type="number" min="1" className="w-14 bg-zinc-800 border border-zinc-700 rounded-lg p-1.5 text-zinc-100 text-xs text-center" value={u.qty} onChange={e => setPkgUsage(i, "qty", Math.max(1, parseInt(e.target.value) || 1))} />
+                    <span className="text-zinc-500 text-xs">個</span>
+                  </div>
+                  <span className="text-zinc-400 text-xs font-mono min-w-[45px] text-right">{fmt(pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0)}</span>
+                  <button onClick={() => rmPkg(i)} className="text-rose-500 hover:text-rose-400 p-1"><MinusCircle size={15} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Buyer note */}
+          <div>
+            <label className="text-zinc-400 text-xs font-medium mb-1 block">備註（買家 / 訂單說明）</label>
+            <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="例如：蝦皮訂單 #123" value={form.buyer_note} onChange={e => set("buyer_note", e.target.value)} />
+          </div>
+
+          {/* Profit summary */}
+          {sellNum > 0 && (
+            <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3.5 space-y-1.5">
+              <div className="flex justify-between text-xs text-zinc-400"><span>卡具售出金額</span><span className="text-zinc-200">{fmt(sellNum)}</span></div>
+              <div className="flex justify-between text-xs text-zinc-400"><span>− 卡具進貨成本</span><span className="text-zinc-200">{fmt(totalCostOfGoods)}</span></div>
+              {totalPkgCost > 0 && <div className="flex justify-between text-xs text-zinc-400"><span>− 消耗包材總成本</span><span className="text-zinc-200">{fmt(totalPkgCost)}</span></div>}
+              {feeNum > 0 && <div className="flex justify-between text-xs text-zinc-400"><span>− 平台手續費</span><span className="text-zinc-200">{fmt(feeNum)}</span></div>}
+              <div className="border-t border-zinc-800 pt-1.5 flex justify-between text-sm font-bold">
+                <span className="text-zinc-300">本筆收益淨利</span>
+                <span className={netProfit >= 0 ? "text-emerald-400" : "text-rose-400"}>{fmt(netProfit)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 border-t border-zinc-800 flex gap-3 bg-zinc-950 rounded-b-2xl">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:bg-zinc-800 transition">取消</button>
+          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium transition">確認存檔</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Accessories Page (卡具頁) ─────────────────────────────────────────────────
+function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDeleteAcc, onAddSale, onEditSale, onDeleteSale }) {
+  const [subTab, setSubTab] = useState("inventory"); // "inventory" | "sales"
+  const [accModal, setAccModal] = useState(null);
+  const [saleModal, setSaleModal] = useState(null);
+  const [showSaleModal, setShowSaleModal] = useState(false);
+
+  const pkgMap = useMemo(() => Object.fromEntries(packaging.map(p => [p.id, p])), [packaging]);
+  const accMap = useMemo(() => Object.fromEntries(accessories.map(a => [a.id, a])), [accessories]);
+
+  const totalInventoryCost = accessories.reduce((s, a) => s + a.stock * a.unit_cost, 0);
+  const totalSalesRevenue = accSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
+  const totalSalesProfit = accSales.reduce((s, sale) => {
+    const cogsCost = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
+    const pkgCost = calcPkgCost(sale.pkg_usages, pkgMap);
+    return s + (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
+  }, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-tab toggle */}
+      <div className="flex items-center gap-2">
+        <div className="flex bg-zinc-900 border border-zinc-800 rounded-xl p-1 gap-1">
+          <button onClick={() => setSubTab("inventory")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${subTab === "inventory" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}>
+            <Wrench size={12} /> 卡具庫存
+          </button>
+          <button onClick={() => setSubTab("sales")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${subTab === "sales" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50 shadow-sm" : "text-zinc-500 hover:text-zinc-300"}`}>
+            <ShoppingCart size={12} /> 銷售訂單
+          </button>
+        </div>
+        <div className="ml-auto flex gap-2">
+          {subTab === "inventory" && (
+            <button onClick={() => setAccModal({ type: "new" })} className="flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-medium transition"><Plus size={15} /> 新增卡具品項</button>
+          )}
+          {subTab === "sales" && (
+            <button onClick={() => { setSaleModal(null); setShowSaleModal(true); }} className="flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-medium transition"><Plus size={15} /> 登錄銷售訂單</button>
+          )}
+        </div>
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard icon={Boxes} label="卡具總庫存成本" value={fmt(totalInventoryCost)} sub={`${accessories.length} 種品項`} accent="bg-teal-700" />
+        <StatCard icon={DollarSign} label="卡具總銷售額" value={fmt(totalSalesRevenue)} sub={`共 ${accSales.length} 筆訂單`} accent="bg-sky-600" />
+        <StatCard icon={TrendingUp} label="卡具總獲利" value={fmt(totalSalesProfit)} sub={totalSalesProfit >= 0 ? "盈利中" : "虧損中"} accent={totalSalesProfit >= 0 ? "bg-emerald-600" : "bg-rose-600"} />
+      </div>
+
+      {/* Inventory sub-tab */}
+      {subTab === "inventory" && (
+        <div className="space-y-2">
+          <p className="text-zinc-400 text-sm">目前已建立 <span className="text-teal-400 font-bold">{accessories.length}</span> 種卡具品項</p>
+          {accessories.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-12 text-center text-zinc-600">
+              <Wrench size={36} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">尚無卡具庫存，請新增品項</p>
+            </div>
+          ) : (
+            <>
+              <div className="hidden sm:grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
+                <span>卡具名稱/規格</span><span>當前庫存</span><span>單位成本</span><span>庫存總成本</span><span>操作</span>
+              </div>
+              {[...accessories].sort((a, b) => a.name.localeCompare(b.name, "zh-TW", { numeric: true, sensitivity: "base" })).map(a => {
+                const low = a.stock <= 5;
+                const totalCost = a.stock * a.unit_cost;
+                return (
+                  <div key={a.id} className={`rounded-2xl border transition p-4 ${low ? "border-rose-900 bg-rose-950/20" : "border-zinc-800 bg-zinc-900 hover:border-zinc-700"}`}>
+                    {/* Mobile */}
+                    <div className="sm:hidden flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-zinc-100 font-medium text-sm">{a.name}</p>
+                          {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10}/>低庫存</span>}
+                        </div>
+                        <div className="flex gap-4 mt-2 text-xs text-zinc-400 font-mono flex-wrap">
+                          <div>庫存：<span className={`font-bold ${low ? "text-rose-400" : "text-zinc-200"}`}>{a.stock}</span> 個</div>
+                          <div>成本：<span className="text-zinc-200">{fmt(a.unit_cost)}</span></div>
+                          <div>總值：<span className="text-teal-300">{fmt(totalCost)}</span></div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => setAccModal(a)} className="flex items-center gap-1 px-2.5 py-1.5 bg-zinc-800 hover:bg-teal-900/40 border border-zinc-700 rounded-xl text-xs text-teal-400 transition"><RefreshCw size={11} /> 補貨</button>
+                        <button onClick={() => onDeleteAcc(a.id)} className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-rose-950 flex items-center justify-center text-zinc-600 hover:text-rose-400 transition border border-transparent"><Trash2 size={13} /></button>
+                      </div>
+                    </div>
+                    {/* Desktop */}
+                    <div className="hidden sm:grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_auto] gap-4 items-center">
+                      <div className="flex items-center gap-2">
+                        <Wrench size={14} className={low ? "text-rose-500" : "text-teal-500"} />
+                        <span className="text-zinc-100 text-sm font-medium">{a.name}</span>
+                        {low && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800 flex items-center gap-0.5"><AlertTriangle size={10}/>低庫存</span>}
+                      </div>
+                      <span className={`text-sm font-mono font-bold ${low ? "text-rose-400" : "text-zinc-200"}`}>{a.stock} <span className="text-zinc-600 text-xs font-normal">個</span></span>
+                      <span className="text-zinc-200 text-sm font-mono">{fmt(a.unit_cost)}<span className="text-zinc-600 text-xs"> /個</span></span>
+                      <span className="text-teal-300 text-sm font-mono">{fmt(totalCost)}</span>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => setAccModal(a)} className="flex items-center gap-1 px-3 py-1.5 bg-zinc-800 hover:bg-teal-900/40 border border-zinc-700 rounded-xl text-xs text-teal-400 transition font-medium"><RefreshCw size={11} /> 批次補貨</button>
+                        <button onClick={() => onDeleteAcc(a.id)} className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-rose-950 flex items-center justify-center text-zinc-500 hover:text-rose-400 transition"><Trash2 size={13} /></button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Sales sub-tab */}
+      {subTab === "sales" && (
+        <div className="space-y-2">
+          <p className="text-zinc-400 text-sm">共 <span className="text-teal-400 font-bold">{accSales.length}</span> 筆卡具銷售紀錄</p>
+          {accSales.length === 0 ? (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-12 text-center text-zinc-600">
+              <ShoppingCart size={36} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">尚無卡具銷售紀錄</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
+                <span>品項明細</span><span>成本合計</span><span>售出金額</span><span>獲利</span><span>操作</span>
+              </div>
+              {accSales.map(sale => {
+                const cogsCost = (sale.items || []).reduce((s, it) => s + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
+                const pkgCost = calcPkgCost(sale.pkg_usages, pkgMap);
+                const profit = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
+                const itemSummary = (sale.items || []).map(it => {
+                  const name = accMap[it.acc_id]?.name ?? "已刪除品項";
+                  return `${name} ×${it.qty}`;
+                }).join("、");
+                const dateLabel = (() => {
+                  const d = sale.created_at || "";
+                  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                  if (m) return `${parseInt(m[2])}月${parseInt(m[3])}日`;
+                  const m2 = d.match(/^(\d{4})-(\d{2})/);
+                  if (m2) return `${parseInt(m2[2])}月`;
+                  return "";
+                })();
+
+                return (
+                  <div key={sale.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
+                    {/* Mobile */}
+                    <div className="lg:hidden space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            {dateLabel && <span className="text-teal-500 text-xs font-mono shrink-0">{dateLabel}</span>}
+                          </div>
+                          <p className="text-zinc-100 font-medium text-sm leading-snug break-words">{itemSummary || "（無品項）"}</p>
+                          {sale.buyer_note && <p className="text-zinc-500 text-xs mt-0.5">{sale.buyer_note}</p>}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <button onClick={() => { setSaleModal(sale); setShowSaleModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
+                          <button onClick={() => onDeleteSale(sale.id)} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-rose-950 flex items-center justify-center transition text-zinc-500 hover:text-rose-400"><Trash2 size={13} /></button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1 text-xs border-y border-zinc-800/50 py-1.5 my-1 font-mono">
+                        <div><span className="text-zinc-500 block">成本</span><span className="text-zinc-300">{fmt(cogsCost + pkgCost)}</span></div>
+                        <div><span className="text-zinc-500 block">售出</span><span className="text-zinc-300">{fmt(sale.sell_price)}</span></div>
+                        <div><span className="text-zinc-500 block">獲利</span><span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit)}</span></div>
+                      </div>
+                    </div>
+                    {/* Desktop */}
+                    <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 items-center">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          {dateLabel && <span className="text-teal-500 text-xs font-mono shrink-0">{dateLabel}</span>}
+                        </div>
+                        <p className="text-zinc-100 text-sm font-medium truncate">{itemSummary || "（無品項）"}</p>
+                        {sale.buyer_note && <p className="text-zinc-500 text-xs truncate mt-0.5">{sale.buyer_note}</p>}
+                      </div>
+                      <span className="text-zinc-300 text-sm font-mono">{fmt(cogsCost + pkgCost)}</span>
+                      <span className="text-zinc-300 text-sm font-mono">{fmt(sale.sell_price)}</span>
+                      <span className={`text-sm font-mono font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit)}</span>
+                      <div className="flex gap-1.5">
+                        <button onClick={() => { setSaleModal(sale); setShowSaleModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
+                        <button onClick={() => onDeleteSale(sale.id)} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-rose-950 flex items-center justify-center transition text-zinc-500 hover:text-rose-400"><Trash2 size={13} /></button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {accModal && <AccessoryModal acc={accModal?.type === "new" ? null : accModal} onSave={(data) => { onAccUpdate(data); setAccModal(null); }} onClose={() => setAccModal(null)} />}
+      {showSaleModal && <AccessorySaleModal sale={saleModal} accessories={accessories} packaging={packaging} onSave={(data) => { if (data.id) onEditSale(data); else onAddSale(data); setShowSaleModal(false); }} onClose={() => setShowSaleModal(false)} />}
+    </div>
+  );
+}
+
 // ─── Packaging Page ───────────────────────────────────────────────────────────
 function PackagingPage({ packaging, onPkgUpdate, onDeletePkg }) {
   const [modal, setModal] = useState(null);
@@ -655,6 +1148,8 @@ export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [cards, setCards] = useState([]);
   const [packaging, setPkg] = useState([]);
+  const [accessories, setAcc] = useState([]);
+  const [accSales, setAccSales] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
 
   // 1. 監聽並檢查 Supabase 使用者登入狀態
@@ -676,15 +1171,19 @@ export default function App() {
     if (!currentUser) return;
     setDataLoading(true);
     try {
-      const [cardsRes, pkgRes] = await Promise.all([
+      const [cardsRes, pkgRes, accRes, accSalesRes] = await Promise.all([
         supabase.from("cards").select("*").order("created_at", { ascending: false }),
-        supabase.from("packaging").select("*").order("created_at", { ascending: true })
+        supabase.from("packaging").select("*").order("created_at", { ascending: true }),
+        supabase.from("accessories").select("*").order("created_at", { ascending: true }),
+        supabase.from("acc_sales").select("*").order("created_at", { ascending: false }),
       ]);
       if (cardsRes.error) throw cardsRes.error;
       if (pkgRes.error) throw pkgRes.error;
       
       setCards(cardsRes.data || []);
       setPkg(pkgRes.data || []);
+      setAcc(accRes.data || []);
+      setAccSales(accSalesRes.data || []);
     } catch (err) {
       console.error("雲端讀取錯誤:", err.message);
     } finally {
@@ -823,11 +1322,105 @@ export default function App() {
     setPkg(ps => ps.filter(p => p.id !== id));
   }, []);
 
+  const handleAccUpdate = useCallback(async (data) => {
+    if (!user) return;
+    if (data.type === "new") {
+      const newRow = { user_id: user.id, name: data.name, stock: data.stock, unit_cost: data.unit_cost };
+      const { data: inserted, error } = await supabase.from("accessories").insert([newRow]).select();
+      if (error) return alert("卡具建立失敗: " + error.message);
+      if (inserted) setAcc(ps => [...ps, inserted[0]]);
+    } else if (data.type === "restock") {
+      const a = accessories.find(item => item.id === data.id);
+      if (!a) return;
+      const currentTotalCost = a.stock * a.unit_cost;
+      const finalStock = a.stock + data.qty_add;
+      const finalUnitCost = finalStock > 0 ? (currentTotalCost + data.total_cost) / finalStock : 0;
+      const { error } = await supabase.from("accessories").update({
+        stock: finalStock,
+        unit_cost: parseFloat(finalUnitCost.toFixed(1))
+      }).eq("id", data.id);
+      if (error) return alert("補貨失敗: " + error.message);
+      setAcc(ps => ps.map(item => item.id === data.id ? { ...item, stock: finalStock, unit_cost: parseFloat(finalUnitCost.toFixed(1)) } : item));
+    }
+  }, [user, accessories]);
+
+  const deleteAcc = useCallback(async (id) => {
+    if (!confirm("確定刪除此卡具品項？")) return;
+    const { error } = await supabase.from("accessories").delete().eq("id", id);
+    if (error) return alert("刪除失敗: " + error.message);
+    setAcc(ps => ps.filter(a => a.id !== id));
+  }, []);
+
+  const syncAccStockToCloud = async (updatedAccList) => {
+    setAcc(updatedAccList);
+    for (const a of updatedAccList) {
+      await supabase.from("accessories").update({ stock: a.stock, unit_cost: a.unit_cost }).eq("id", a.id);
+    }
+  };
+
+  const adjustAccStockLocal = (items, multiplier, currentAccList) => {
+    if (!items || items.length === 0) return currentAccList;
+    return currentAccList.map(a => {
+      const match = items.find(it => it.acc_id === a.id);
+      if (!match) return a;
+      return { ...a, stock: Math.max(0, a.stock + (match.qty || 0) * multiplier) };
+    });
+  };
+
+  const addAccSale = useCallback(async (data) => {
+    if (!user) return;
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    let nextAcc = adjustAccStockLocal(data.items, -1, [...accessories]);
+    let nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, [...packaging]);
+
+    const newRow = { user_id: user.id, ...data, created_at: dateStr, updated_at: dateStr };
+    const { data: inserted, error } = await supabase.from("acc_sales").insert([newRow]).select();
+    if (error) return alert("卡具銷售新增失敗: " + error.message);
+    if (inserted) setAccSales(ss => [inserted[0], ...ss]);
+    await syncAccStockToCloud(nextAcc);
+    await syncPackagingStockToCloud(nextPkgs);
+  }, [user, accessories, packaging]);
+
+  const editAccSale = useCallback(async (data) => {
+    if (!user) return;
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const original = accSales.find(s => s.id === data.id);
+    if (!original) return;
+
+    let nextAcc = adjustAccStockLocal(original.items, 1, [...accessories]);
+    nextAcc = adjustAccStockLocal(data.items, -1, nextAcc);
+    let nextPkgs = adjustPackagingStockLocal(original.pkg_usages, 1, [...packaging]);
+    nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, nextPkgs);
+
+    const { error } = await supabase.from("acc_sales").update({ ...data, updated_at: dateStr }).eq("id", data.id);
+    if (error) return alert("卡具銷售更新失敗: " + error.message);
+    setAccSales(ss => ss.map(s => s.id === data.id ? { ...data, updated_at: dateStr } : s));
+    await syncAccStockToCloud(nextAcc);
+    await syncPackagingStockToCloud(nextPkgs);
+  }, [user, accSales, accessories, packaging]);
+
+  const deleteAccSale = useCallback(async (id) => {
+    if (!confirm("確定刪除這筆卡具銷售紀錄嗎？")) return;
+    const target = accSales.find(s => s.id === id);
+    if (!target) return;
+    let nextAcc = adjustAccStockLocal(target.items, 1, [...accessories]);
+    let nextPkgs = adjustPackagingStockLocal(target.pkg_usages, 1, [...packaging]);
+    const { error } = await supabase.from("acc_sales").delete().eq("id", id);
+    if (error) return alert("刪除失敗: " + error.message);
+    setAccSales(ss => ss.filter(s => s.id !== id));
+    await syncAccStockToCloud(nextAcc);
+    await syncPackagingStockToCloud(nextPkgs);
+  }, [accSales, accessories, packaging]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
     setCards([]);
     setPkg([]);
+    setAcc([]);
+    setAccSales([]);
   };
 
   if (!authChecked) {
@@ -860,6 +1453,7 @@ export default function App() {
             {[
               { key: "dashboard", label: "數據看板", icon: LayoutDashboard },
               { key: "cards", label: "卡片管理", icon: CreditCard },
+              { key: "accessories", label: "卡具管理", icon: Wrench },
               { key: "packaging", label: "包材管理", icon: Package },
             ].map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${tab === t.key ? "bg-zinc-800 text-zinc-100 shadow-sm border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}>
@@ -877,11 +1471,13 @@ export default function App() {
             <h1 className="text-xl font-bold text-zinc-100">
               {tab === "dashboard" && "數據看板"}
               {tab === "cards" && "卡片管理"}
+              {tab === "accessories" && "卡具管理"}
               {tab === "packaging" && "包材管理"}
             </h1>
             <p className="text-zinc-500 text-xs mt-0.5">
               {tab === "dashboard" && "雲端利潤概覽與跨管道即時分析"}
               {tab === "cards"     && `目前雲端載入有 ${cards.length} 張實體球員卡紀錄`}
+              {tab === "accessories" && `卡夾、磁吸殼等卡具庫存與獨立銷售管理`}
               {tab === "packaging" && "追蹤店內耗材雲端餘額、加權單價與補貨紀錄"}
             </p>
           </div>
@@ -890,6 +1486,7 @@ export default function App() {
 
         {tab === "dashboard" && <Dashboard cards={cards} pkgMap={pkgMap} />}
         {tab === "cards"     && <CardsPage cards={cards} packaging={packaging} onAdd={addCard} onEdit={editCard} onDelete={deleteCard} />}
+        {tab === "accessories" && <AccessoriesPage accessories={accessories} accSales={accSales} packaging={packaging} onAccUpdate={handleAccUpdate} onDeleteAcc={deleteAcc} onAddSale={addAccSale} onEditSale={editAccSale} onDeleteSale={deleteAccSale} />}
         {tab === "packaging" && <PackagingPage packaging={packaging} onPkgUpdate={handlePkgUpdate} onDeletePkg={deletePkg} />}
       </main>
     </div>
