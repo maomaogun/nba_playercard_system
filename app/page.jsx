@@ -1068,7 +1068,7 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
               <div className="hidden sm:grid grid-cols-[2.5fr_1.2fr_1.2fr_1.2fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
                 <span>卡具名稱/規格</span><span>當前庫存</span><span>單位成本</span><span>庫存總成本</span><span>操作</span>
               </div>
-              {accessories.map(a => {
+              {[...accessories].sort((a, b) => a.name.localeCompare(b.name, "zh-TW", { numeric: true, sensitivity: "base" })).map(a => {
                 const low = a.stock <= 5;
                 const totalCost = a.stock * a.unit_cost;
                 return (
@@ -1122,20 +1122,29 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="hidden lg:grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
-                <span>品項明細</span><span>通路</span><span>成本合計</span><span>售出金額</span><span>獲利</span><span>操作</span>
+              <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
+                <span>品項明細</span><span>成本合計</span><span>售出金額</span><span>獲利</span><span>操作</span>
               </div>
               {accSales.map(sale => {
                 const cogsCost = (sale.items || []).reduce((s, it) => s + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
                 const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
                 const profit   = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
                 const itemSummary = (sale.items || []).map(it => `${accMap[it.acc_id]?.name ?? "已刪除品項"} ×${it.qty}`).join("、");
+                const dateLabel = (() => {
+                  const d = sale.created_at || "";
+                  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                  if (m) return `${parseInt(m[2])}月${parseInt(m[3])}日`;
+                  const m2 = d.match(/^(\d{4})-(\d{2})/);
+                  if (m2) return `${parseInt(m2[2])}月`;
+                  return "";
+                })();
                 return (
                   <div key={sale.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
                     <div className="lg:hidden space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="text-zinc-100 font-medium text-sm leading-snug">{itemSummary || "（無品項）"}</p>
+                        <div className="flex-1 min-w-0">
+                          {dateLabel && <span className="text-teal-500 text-xs font-mono block mb-0.5">{dateLabel}</span>}
+                          <p className="text-zinc-100 font-medium text-sm leading-snug break-words">{itemSummary || "（無品項）"}</p>
                           {sale.buyer_note && <p className="text-zinc-500 text-xs mt-0.5">{sale.buyer_note}</p>}
                         </div>
                         <div className="flex gap-1 shrink-0">
@@ -1148,14 +1157,13 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                         <div><span className="text-zinc-500 block">售出</span><span className="text-zinc-300">{fmt(sale.sell_price)}</span></div>
                         <div><span className="text-zinc-500 block">獲利</span><span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span></div>
                       </div>
-                      {sale.channel && <span className="text-zinc-500 text-xs bg-zinc-800 px-2 py-0.5 rounded-md">{sale.channel}</span>}
                     </div>
-                    <div className="hidden lg:grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_auto] gap-4 items-center">
-                      <div>
+                    <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 items-center">
+                      <div className="min-w-0">
+                        {dateLabel && <span className="text-teal-500 text-xs font-mono block mb-0.5">{dateLabel}</span>}
                         <p className="text-zinc-100 text-sm font-medium truncate">{itemSummary || "（無品項）"}</p>
                         {sale.buyer_note && <p className="text-zinc-500 text-xs truncate mt-0.5">{sale.buyer_note}</p>}
                       </div>
-                      <span className="text-zinc-400 text-sm">{sale.channel || "—"}</span>
                       <span className="text-zinc-300 text-sm font-mono">{fmt(cogsCost + pkgCost, 1)}</span>
                       <span className="text-zinc-300 text-sm font-mono">{fmt(sale.sell_price)}</span>
                       <span className={`text-sm font-mono font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span>
@@ -1436,10 +1444,10 @@ export default function App() {
   const addAccSale = useCallback(async (data) => {
     if (!user) return;
     const today = new Date();
-    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     let nextAcc  = adjustAccStockLocal(data.items, -1, [...accessories]);
     let nextPkgs = adjustPackagingStockLocal(data.pkg_usages, -1, [...packaging]);
-    const newRow = { user_id: user.id, ...data, created_at: currentMonth, updated_at: currentMonth };
+    const newRow = { user_id: user.id, ...data, created_at: dateStr, updated_at: dateStr };
     const { data: inserted, error } = await supabase.from("acc_sales").insert([newRow]).select();
     if (error) return alert("卡具銷售新增失敗: " + error.message);
     if (inserted) setAccSales(ss => [inserted[0], ...ss]);
