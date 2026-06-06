@@ -5,7 +5,7 @@ import {
   TrendingUp, DollarSign, BarChart3, X, AlertTriangle, CheckCircle2,
   Clock, Archive, ShoppingBag, RefreshCw, Boxes, PlusCircle,
   MinusCircle, Search, Filter, Star, LogIn, LogOut, Lock, Mail, Loader2,
-  Wrench, ShoppingCart, Tag, ChevronLeft, ChevronRight
+  Wrench, ShoppingCart, Tag, ChevronLeft, ChevronRight, Download
 } from "lucide-react";
 
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
@@ -20,6 +20,24 @@ const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// 將二維陣列匯出成 CSV（含 UTF-8 BOM，Excel 開啟中文不亂碼）
+const exportCSV = (filename, headers, rows) => {
+  const esc = (v) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = [headers, ...rows].map(r => r.map(esc).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + lines], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}_${todayISO()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -706,6 +724,26 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
   const handleSearch = (v) => { setSearch(v); setPage(1); };
   const handleFilter = (v) => { setFilterStatus(v); setPage(1); };
 
+  const handleExport = () => {
+    if (filtered.length === 0) return alert("目前沒有可匯出的卡片資料");
+    const headers = ["交易日期", "卡片名稱", "買入價", "賣出價", "平台手續費", "包材成本", "獲利", "備註"];
+    const rows = filtered.map(c => {
+      const pkgCost = calcPkgCost(c.pkg_usages, pkgMap);
+      const profit = calcProfit(c, pkgMap);
+      return [
+        (c.created_at || "").slice(0, 10),
+        c.name,
+        c.buy_price ?? 0,
+        c.sell_price ?? "",
+        c.platform_fee ?? 0,
+        pkgCost,
+        profit ?? "",
+        c.notes ?? "",
+      ];
+    });
+    exportCSV("卡片交易紀錄", headers, rows);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
@@ -721,6 +759,7 @@ function CardsPage({ cards, packaging, onAdd, onEdit, onDelete }) {
               {Object.entries(STATUS_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
             </select>
           </div>
+          <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded-xl text-sm font-medium transition" title="匯出目前清單為 CSV"><Download size={15} /> 匯出</button>
           <button onClick={() => { setModalCard(null); setShowModal(true); }} className="flex items-center gap-1.5 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-sm font-medium transition"><Plus size={15} /> 登錄卡片</button>
         </div>
       </div>
@@ -1172,6 +1211,33 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
     return s + (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
   }, 0);
 
+  const handleExportInventory = () => {
+    if (accessories.length === 0) return alert("目前沒有可匯出的卡具庫存");
+    const headers = ["卡具名稱/規格", "當前庫存", "單位成本", "庫存總成本"];
+    const rows = [...accessories]
+      .sort((a, b) => a.name.localeCompare(b.name, "zh-TW", { numeric: true, sensitivity: "base" }))
+      .map(a => [a.name, a.stock, a.unit_cost, a.stock * a.unit_cost]);
+    exportCSV("卡具庫存", headers, rows);
+  };
+
+  const handleExportSales = () => {
+    if (accSales.length === 0) return alert("目前沒有可匯出的銷售訂單");
+    const headers = ["交易日期", "品項明細", "成本合計", "售出金額", "平台手續費", "獲利", "備註"];
+    const rows = [...accSales]
+      .sort((a, b) => {
+        const ka = a.created_at ?? a.id ?? "", kb = b.created_at ?? b.id ?? "";
+        return ka < kb ? 1 : ka > kb ? -1 : 0;
+      })
+      .map(sale => {
+        const cogsCost = (sale.items || []).reduce((s, it) => s + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
+        const pkgCost = calcPkgCost(sale.pkg_usages, pkgMap);
+        const profit = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
+        const itemSummary = (sale.items || []).map(it => `${accMap[it.acc_id]?.name ?? "已刪除品項"} ×${it.qty}`).join("、");
+        return [(sale.created_at || "").slice(0, 10), itemSummary, cogsCost + pkgCost, sale.sell_price ?? 0, sale.platform_fee ?? 0, profit, sale.buyer_note ?? ""];
+      });
+    exportCSV("卡具銷售訂單", headers, rows);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -1184,6 +1250,7 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
           </button>
         </div>
         <div className="ml-auto flex gap-2">
+          <button onClick={subTab === "inventory" ? handleExportInventory : handleExportSales} className="flex items-center gap-1.5 px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 rounded-xl text-sm font-medium transition" title="匯出為 CSV"><Download size={15} /> 匯出</button>
           {subTab === "inventory" && (
             <button onClick={() => setAccModal({ type: "new" })} className="flex items-center gap-1.5 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-medium transition"><Plus size={15} /> 新增卡具品項</button>
           )}
