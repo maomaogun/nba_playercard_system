@@ -60,6 +60,10 @@ const STATUS_META = {
 };
 
 const CHANNELS = ["蝦皮拍賣", "Facebook", "麥當勞面交", "eBay", "Yahoo拍賣", "Line私訊", "其他"];
+
+// 自用標記：以 channel === SELF_USE 表示此筆為自用消耗（扣庫存，但不列入銷售額/獲利/ROI 統計）
+const SELF_USE = "自用";
+const isSelfUse = (sale) => sale?.channel === SELF_USE;
 const PAGE_SIZE = 15;
 
 const calcPkgCost = (usages, pkgMap) =>
@@ -183,9 +187,10 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
   const cardProfit  = soldCards.reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
   const cardRoi     = cardBuyCost ? (cardProfit / cardBuyCost) * 100 : 0;
 
-  // 卡具統計
-  const accRevenue = accSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
-  const accCogs    = accSales.reduce((s, sale) => {
+  // 卡具統計（自用不列入）
+  const billableAccSales = accSales.filter(s => !isSelfUse(s));
+  const accRevenue = billableAccSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
+  const accCogs    = billableAccSales.reduce((s, sale) => {
     const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
     const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
     return s + cogs + pkg + (sale.platform_fee ?? 0);
@@ -210,7 +215,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
         .reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
 
       const ap = accSales
-        .filter(s => (s.created_at || s.updated_at || "").startsWith(key))
+        .filter(s => !isSelfUse(s) && (s.created_at || s.updated_at || "").startsWith(key))
         .reduce((s, sale) => {
           const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
           const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
@@ -240,7 +245,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
         .filter(c => (c.created_at || c.updated_at || "").startsWith(key))
         .reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
       const accProfitDay = accSales
-        .filter(s => (s.created_at || s.updated_at || "").startsWith(key))
+        .filter(s => !isSelfUse(s) && (s.created_at || s.updated_at || "").startsWith(key))
         .reduce((s, sale) => {
           const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
           const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
@@ -1011,6 +1016,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
     platform_fee: sale?.platform_fee ?? "",
     sell_price: sale?.sell_price ?? "",
     sale_date: (sale?.created_at || "").slice(0, 10) || todayISO(),
+    self_use: sale ? isSelfUse(sale) : false,
     pkg_usages: sale?.pkg_usages ? JSON.parse(JSON.stringify(sale.pkg_usages)) : [],
     items: sale?.items ? JSON.parse(JSON.stringify(sale.items)) : [],
   }));
@@ -1082,8 +1088,16 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
       unit_cost_snap: pkgMap[u.pkg_id]?.unit_cost ?? u.unit_cost_snap ?? 0,
       qty: Math.max(1, Number(u.qty) || 1),
     }));
-    const { sale_date, ...rest } = form;
-    onSave({ ...sale, ...rest, created_at: sale_date || todayISO(), items: snappedItems, pkg_usages: snappedPkgs, sell_price: sellNum, platform_fee: feeNum });
+    const { sale_date, self_use, ...rest } = form;
+    onSave({
+      ...sale, ...rest,
+      created_at: sale_date || todayISO(),
+      channel: self_use ? SELF_USE : (rest.channel === SELF_USE ? "蝦皮拍賣" : rest.channel),
+      items: snappedItems,
+      pkg_usages: snappedPkgs,
+      sell_price: self_use ? 0 : sellNum,
+      platform_fee: self_use ? 0 : feeNum,
+    });
   };
 
   return (
@@ -1123,14 +1137,25 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
               <p className="text-right text-xs text-zinc-500 mt-1.5">卡具成本合計：<span className="text-zinc-300 font-mono">{fmt(totalCostOfGoods, 1)}</span></p>
             )}
           </div>
+
+          {/* 自用切換 */}
+          <label className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${form.self_use ? "bg-amber-950/30 border-amber-800" : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"}`}>
+            <input type="checkbox" className="w-4 h-4 accent-amber-500" checked={form.self_use} onChange={e => set("self_use", e.target.checked)} />
+            <div>
+              <p className="text-zinc-200 text-sm font-medium">此筆為自用（非販售）</p>
+              <p className="text-zinc-500 text-xs">會扣除庫存，但不列入銷售額、獲利與投資報酬率統計</p>
+            </div>
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-zinc-400 text-xs font-medium mb-1 block">實際售出總金額（元）</label>
-              <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="0" value={form.sell_price} onChange={e => set("sell_price", e.target.value)} />
+              <input type="number" disabled={form.self_use} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition disabled:opacity-40" placeholder={form.self_use ? "自用免填" : "0"} value={form.self_use ? "" : form.sell_price} onChange={e => set("sell_price", e.target.value)} />
             </div>
             <div>
               <label className="text-zinc-400 text-xs font-medium mb-1 block">交易通路/平台</label>
-              <select className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" value={form.channel} onChange={e => set("channel", e.target.value)}>
+              <select disabled={form.self_use} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition disabled:opacity-40" value={form.self_use ? "" : form.channel} onChange={e => set("channel", e.target.value)}>
+                {form.self_use && <option value="">—</option>}
                 {CHANNELS.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
@@ -1138,7 +1163,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-zinc-400 text-xs font-medium mb-1 block">平台手續費（元）</label>
-              <input type="number" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="0" value={form.platform_fee} onChange={e => set("platform_fee", e.target.value)} />
+              <input type="number" disabled={form.self_use} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition disabled:opacity-40" placeholder={form.self_use ? "自用免填" : "0"} value={form.self_use ? "" : form.platform_fee} onChange={e => set("platform_fee", e.target.value)} />
             </div>
             <div>
               <label className="text-zinc-400 text-xs font-medium mb-1 block">交易日期</label>
@@ -1171,7 +1196,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
             <label className="text-zinc-400 text-xs font-medium mb-1 block">備註（買家 / 訂單說明）</label>
             <input className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-zinc-100 text-sm focus:outline-none focus:border-teal-500 transition" placeholder="例如：蝦皮訂單 #123" value={form.buyer_note} onChange={e => set("buyer_note", e.target.value)} />
           </div>
-          {sellNum > 0 && (
+          {!form.self_use && sellNum > 0 && (
             <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-3.5 space-y-1.5">
               <div className="flex justify-between text-xs text-zinc-400"><span>卡具售出金額</span><span className="text-zinc-200">{fmt(sellNum)}</span></div>
               <div className="flex justify-between text-xs text-zinc-400"><span>− 卡具進貨成本</span><span className="text-zinc-200">{fmt(totalCostOfGoods, 1)}</span></div>
@@ -1204,8 +1229,9 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
   const accMap = useMemo(() => Object.fromEntries(accessories.map(a => [a.id, a])), [accessories]);
 
   const totalInventoryCost = accessories.reduce((s, a) => s + a.stock * a.unit_cost, 0);
-  const totalSalesRevenue  = accSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
-  const totalSalesProfit   = accSales.reduce((s, sale) => {
+  const billableSales = accSales.filter(s => !isSelfUse(s));
+  const totalSalesRevenue  = billableSales.reduce((s, sale) => s + (sale.sell_price ?? 0), 0);
+  const totalSalesProfit   = billableSales.reduce((s, sale) => {
     const cogsCost = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
     const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
     return s + (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
@@ -1231,9 +1257,10 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
       .map(sale => {
         const cogsCost = (sale.items || []).reduce((s, it) => s + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
         const pkgCost = calcPkgCost(sale.pkg_usages, pkgMap);
+        const selfUse = isSelfUse(sale);
         const profit = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
         const itemSummary = (sale.items || []).map(it => `${accMap[it.acc_id]?.name ?? "已刪除品項"} ×${it.qty}`).join("、");
-        return [(sale.created_at || "").slice(0, 10), itemSummary, cogsCost + pkgCost, sale.sell_price ?? 0, sale.platform_fee ?? 0, profit, sale.buyer_note ?? ""];
+        return [(sale.created_at || "").slice(0, 10), itemSummary, cogsCost + pkgCost, selfUse ? "自用" : (sale.sell_price ?? 0), selfUse ? "" : (sale.platform_fee ?? 0), selfUse ? "自用" : profit, sale.buyer_note ?? ""];
       });
     exportCSV("卡具銷售訂單", headers, rows);
   };
@@ -1345,6 +1372,7 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                 const pkgCost  = calcPkgCost(sale.pkg_usages, pkgMap);
                 const profit   = (sale.sell_price ?? 0) - cogsCost - pkgCost - (sale.platform_fee ?? 0);
                 const itemSummary = (sale.items || []).map(it => `${accMap[it.acc_id]?.name ?? "已刪除品項"} ×${it.qty}`).join("、");
+                const selfUse = isSelfUse(sale);
                 const dateLabel = (() => {
                   const d = sale.created_at || "";
                   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -1358,7 +1386,10 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                     <div className="lg:hidden space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          {dateLabel && <span className="text-teal-500 text-xs font-mono block mb-0.5">{dateLabel}</span>}
+                          <div className="flex items-center gap-2 mb-0.5">
+                            {dateLabel && <span className="text-teal-500 text-xs font-mono">{dateLabel}</span>}
+                            {selfUse && <span className="px-1.5 py-0.5 bg-amber-950 text-amber-400 text-[10px] font-bold rounded-full border border-amber-800">自用</span>}
+                          </div>
                           <p className="text-zinc-100 font-medium text-sm leading-snug break-words">{itemSummary || "（無品項）"}</p>
                           {sale.buyer_note && <p className="text-zinc-500 text-xs mt-0.5">{sale.buyer_note}</p>}
                         </div>
@@ -1369,19 +1400,22 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                       </div>
                       <div className="grid grid-cols-3 gap-1 text-xs border-y border-zinc-800/50 py-1.5 my-1 font-mono">
                         <div><span className="text-zinc-500 block">成本</span><span className="text-zinc-300">{fmt(cogsCost + pkgCost, 1)}</span></div>
-                        <div><span className="text-zinc-500 block">售出</span><span className="text-zinc-300">{fmt(sale.sell_price)}</span></div>
-                        <div><span className="text-zinc-500 block">獲利</span><span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span></div>
+                        <div><span className="text-zinc-500 block">售出</span><span className="text-zinc-300">{selfUse ? "—" : fmt(sale.sell_price)}</span></div>
+                        <div><span className="text-zinc-500 block">獲利</span>{selfUse ? <span className="text-amber-400">自用</span> : <span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span>}</div>
                       </div>
                     </div>
                     <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 items-center">
                       <div className="min-w-0">
-                        {dateLabel && <span className="text-teal-500 text-xs font-mono block mb-0.5">{dateLabel}</span>}
+                        <div className="flex items-center gap-2 mb-0.5">
+                          {dateLabel && <span className="text-teal-500 text-xs font-mono">{dateLabel}</span>}
+                          {selfUse && <span className="px-1.5 py-0.5 bg-amber-950 text-amber-400 text-[10px] font-bold rounded-full border border-amber-800">自用</span>}
+                        </div>
                         <p className="text-zinc-100 text-sm font-medium truncate">{itemSummary || "（無品項）"}</p>
                         {sale.buyer_note && <p className="text-zinc-500 text-xs truncate mt-0.5">{sale.buyer_note}</p>}
                       </div>
                       <span className="text-zinc-300 text-sm font-mono">{fmt(cogsCost + pkgCost, 1)}</span>
-                      <span className="text-zinc-300 text-sm font-mono">{fmt(sale.sell_price)}</span>
-                      <span className={`text-sm font-mono font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span>
+                      <span className="text-zinc-300 text-sm font-mono">{selfUse ? "—" : fmt(sale.sell_price)}</span>
+                      {selfUse ? <span className="text-amber-400 text-sm">自用</span> : <span className={`text-sm font-mono font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span>}
                       <div className="flex gap-1.5">
                         <button onClick={() => { setSaleModal(sale); setShowSaleModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
                         <button onClick={() => onDeleteSale(sale.id)} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-rose-950 flex items-center justify-center transition text-zinc-500 hover:text-rose-400"><Trash2 size={13} /></button>
