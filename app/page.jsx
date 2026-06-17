@@ -1748,7 +1748,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans antialiased">
       <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-16">
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-900/30">
               <Star size={14} className="text-white fill-white" />
@@ -1774,7 +1774,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-6 flex justify-between items-end">
           <div>
             <h1 className="text-xl font-bold text-zinc-100">
