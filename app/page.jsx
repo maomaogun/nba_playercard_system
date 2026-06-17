@@ -583,9 +583,9 @@ function CardModal({ card, packaging, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative z-10 w-full sm:max-w-lg bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="relative z-10 w-full sm:max-w-lg bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-zinc-800">
           <h2 className="text-zinc-100 font-semibold text-base flex items-center gap-2">
             <CreditCard size={16} className="text-violet-400" />
@@ -1101,9 +1101,9 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative z-10 w-full sm:max-w-lg bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="relative z-10 w-full sm:max-w-lg bg-zinc-950 border border-zinc-800 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-zinc-800">
           <h2 className="text-zinc-100 font-semibold text-base flex items-center gap-2">
             <ShoppingCart size={16} className="text-teal-400" />
