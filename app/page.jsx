@@ -229,10 +229,43 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
 
   const maxProfit = Math.max(...monthlyProfit.map(m => Math.abs(m.profit)), 1);
 
-  // 圖表切換：'monthly'（每月獲利長條圖，預設）| 'daily'（每日營業額折線圖）
+  // 圖表切換：'monthly' | 'weekly' | 'daily'
   const [chartMode, setChartMode] = useState("monthly");
-  const [dayRange, setDayRange] = useState(14); // 折線圖顯示最近幾天
-  const [hoverIdx, setHoverIdx] = useState(null); // 折線圖滑鼠停留的資料點
+  const [dayRange, setDayRange] = useState(14);
+  const [hoverIdx, setHoverIdx] = useState(null);
+
+  // 每週獲利（禮拜一～禮拜日為一週，最近 8 週）
+  const weeklyProfit = useMemo(() => {
+    const result = [];
+    const now = new Date();
+    // 找到本週的禮拜一
+    const dow = now.getDay(); // 0=日,1=一...6=六
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
+    for (let w = 7; w >= 0; w--) {
+      const mon = new Date(thisMonday.getFullYear(), thisMonday.getMonth(), thisMonday.getDate() - w * 7);
+      const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+      // 產生這週每一天的 key（YYYY-MM-DD）
+      const dayKeys = [];
+      for (let d = 0; d < 7; d++) {
+        const day = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + d);
+        dayKeys.push(`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`);
+      }
+      const cp = soldCards
+        .filter(c => dayKeys.some(k => (c.created_at || c.updated_at || "").startsWith(k)))
+        .reduce((s, c) => s + (calcProfit(c, pkgMap) ?? 0), 0);
+      const ap = accSales
+        .filter(s => !isSelfUse(s) && dayKeys.some(k => (s.created_at || s.updated_at || "").startsWith(k)))
+        .reduce((s, sale) => {
+          const cogs = (sale.items || []).reduce((ss, it) => ss + (it.unit_cost_snap ?? accMap[it.acc_id]?.unit_cost ?? 0) * (it.qty || 0), 0);
+          const pkg  = calcPkgCost(sale.pkg_usages, pkgMap);
+          return s + (sale.sell_price ?? 0) - cogs - pkg - (sale.platform_fee ?? 0);
+        }, 0);
+      const label = `${mon.getMonth() + 1}/${mon.getDate()}-${sun.getMonth() + 1}/${sun.getDate()}`;
+      result.push({ label, profit: cp + ap });
+    }
+    return result;
+  }, [soldCards, accSales, pkgMap, accMap]);
 
   // 每日收益（賣出價扣成本，卡片＋卡具）
   const dailyRevenue = useMemo(() => {
@@ -297,7 +330,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <h3 className="text-zinc-200 font-semibold mb-4 flex items-center gap-2">
             <TrendingUp size={16} className="text-violet-400" />
-            {chartMode === "monthly" ? "每月獲利趨勢（卡片＋卡具）" : "每日收益趨勢（卡片＋卡具）"}
+            {chartMode === "monthly" ? "每月獲利趨勢（卡片＋卡具）" : chartMode === "weekly" ? "每週獲利趨勢（卡片＋卡具）" : "每日收益趨勢（卡片＋卡具）"}
           </h3>
 
           {chartMode === "monthly" ? (
@@ -318,7 +351,28 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                 );
               })}
             </div>
-          ) : (
+          ) : chartMode === "weekly" ? (() => {
+            const maxWeekProfit = Math.max(...weeklyProfit.map(w => Math.abs(w.profit)), 1);
+            return (
+              <div className="flex items-end gap-1.5 h-40 pt-4">
+                {weeklyProfit.map((w, i) => {
+                  const pct = (Math.abs(w.profit) / maxWeekProfit) * 100;
+                  const isPos = w.profit >= 0;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end min-w-0">
+                      <span className={`text-[9px] font-bold leading-tight text-center ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
+                        {w.profit !== 0 ? `${isPos ? "+" : ""}${w.profit}` : ""}
+                      </span>
+                      <div className="w-full flex flex-col justify-end" style={{ height: "100px" }}>
+                        <div className={`w-full rounded-t-md transition-all ${isPos ? "bg-teal-600" : "bg-rose-600"}`} style={{ height: `${Math.max(pct, w.profit !== 0 ? 4 : 0)}%` }} />
+                      </div>
+                      <span className="text-zinc-500 text-[8px] mt-1 text-center leading-tight break-all">{w.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })() : (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-zinc-500 text-xs">最近 {dayRange} 天 · 總收益 <span className="text-teal-400 font-mono">{fmt(dailyTotal)}</span></span>
@@ -407,13 +461,19 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
               onClick={() => setChartMode("monthly")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${chartMode === "monthly" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}
             >
-              <BarChart3 size={12} /> 每月獲利長條圖
+              <BarChart3 size={12} /> 每月
+            </button>
+            <button
+              onClick={() => setChartMode("weekly")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${chartMode === "weekly" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <BarChart3 size={12} /> 每週
             </button>
             <button
               onClick={() => setChartMode("daily")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${chartMode === "daily" ? "bg-zinc-800 text-zinc-100 border border-zinc-700/50" : "text-zinc-500 hover:text-zinc-300"}`}
             >
-              <TrendingUp size={12} /> 每日收益折線圖
+              <TrendingUp size={12} /> 每日
             </button>
           </div>
         </div>
