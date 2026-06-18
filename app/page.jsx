@@ -341,7 +341,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                 return (
                   <div key={m.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
                     <span className={`text-[10px] font-bold ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
-                      {m.profit !== 0 ? `${isPos ? "+" : ""}${m.profit}` : ""}
+                      {m.profit !== 0 ? `${isPos ? "+" : ""}${parseFloat(m.profit.toFixed(1))}` : ""}
                     </span>
                     <div className="w-full flex flex-col justify-end" style={{ height: "100px" }}>
                       <div className={`w-full rounded-t-md transition-all ${isPos ? "bg-violet-600" : "bg-rose-600"}`} style={{ height: `${Math.max(pct, m.profit !== 0 ? 4 : 0)}%` }} />
@@ -361,7 +361,7 @@ function Dashboard({ cards, pkgMap, accSales, accMap }) {
                   return (
                     <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end min-w-0">
                       <span className={`text-[9px] font-bold leading-tight text-center ${isPos ? "text-emerald-400" : "text-rose-400"}`}>
-                        {w.profit !== 0 ? `${isPos ? "+" : ""}${w.profit}` : ""}
+                        {w.profit !== 0 ? `${isPos ? "+" : ""}${parseFloat(w.profit.toFixed(1))}` : ""}
                       </span>
                       <div className="w-full flex flex-col justify-end" style={{ height: "100px" }}>
                         <div className={`w-full rounded-t-md transition-all ${isPos ? "bg-teal-600" : "bg-rose-600"}`} style={{ height: `${Math.max(pct, w.profit !== 0 ? 4 : 0)}%` }} />
