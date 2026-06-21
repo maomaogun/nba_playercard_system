@@ -1077,6 +1077,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
     sell_price: sale?.sell_price ?? "",
     sale_date: (sale?.created_at || "").slice(0, 10) || todayISO(),
     self_use: sale ? isSelfUse(sale) : false,
+    shipped: sale?.shipped ?? false,
     pkg_usages: sale?.pkg_usages ? JSON.parse(JSON.stringify(sale.pkg_usages)) : [],
     items: sale?.items ? JSON.parse(JSON.stringify(sale.items)) : [],
   }));
@@ -1207,6 +1208,15 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
             </div>
           </label>
 
+          {/* 出貨狀態 */}
+          <label className={`flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition ${form.shipped ? "bg-emerald-950/30 border-emerald-800" : "bg-zinc-900/50 border-zinc-800 hover:border-zinc-700"}`}>
+            <input type="checkbox" className="w-4 h-4 accent-emerald-500" checked={form.shipped} onChange={e => set("shipped", e.target.checked)} />
+            <div>
+              <p className="text-zinc-200 text-sm font-medium">已出貨</p>
+              <p className="text-zinc-500 text-xs">勾選代表此筆訂單已寄出，未勾選會顯示在列表最上方提醒出貨</p>
+            </div>
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-zinc-400 text-xs font-medium mb-1 block">實際售出總金額（元）</label>
@@ -1280,6 +1290,7 @@ function AccessorySaleModal({ sale, accessories, packaging, onSave, onClose }) {
 
 // ─── AccessoriesPage ──────────────────────────────────────────────────────────
 function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDeleteAcc, onAddSale, onEditSale, onDeleteSale }) {
+  const toggleShipped = (sale) => onEditSale({ ...sale, shipped: !sale.shipped });
   const [subTab, setSubTab] = useState("inventory");
   const [accModal, setAccModal] = useState(null);
   const [saleModal, setSaleModal] = useState(null);
@@ -1420,10 +1431,13 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
-                <span>品項明細</span><span>成本合計</span><span>售出金額</span><span>獲利</span><span>操作</span>
+              <div className="hidden lg:grid grid-cols-[auto_minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 px-4 py-2 text-zinc-500 text-xs font-semibold tracking-wider">
+                <span>出貨</span><span>品項明細</span><span>成本合計</span><span>售出金額</span><span>獲利</span><span>操作</span>
               </div>
               {[...accSales].sort((a, b) => {
+                const sa = a.shipped ? 1 : 0;
+                const sb = b.shipped ? 1 : 0;
+                if (sa !== sb) return sa - sb; // 未出貨（0）排前面
                 const ka = a.created_at ?? a.id ?? "";
                 const kb = b.created_at ?? b.id ?? "";
                 return ka < kb ? 1 : ka > kb ? -1 : 0;
@@ -1445,13 +1459,17 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                   <div key={sale.id} className="rounded-2xl border border-zinc-800 bg-zinc-900 hover:border-zinc-700 transition p-4">
                     <div className="lg:hidden space-y-2">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            {dateLabel && <span className="text-teal-500 text-xs font-mono">{dateLabel}</span>}
-                            {selfUse && <span className="px-1.5 py-0.5 bg-amber-950 text-amber-400 text-[10px] font-bold rounded-full border border-amber-800">自用</span>}
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          <input type="checkbox" checked={!!sale.shipped} onChange={() => toggleShipped(sale)} title="已出貨" className="w-4 h-4 mt-1 accent-emerald-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              {dateLabel && <span className="text-teal-500 text-xs font-mono">{dateLabel}</span>}
+                              {selfUse && <span className="px-1.5 py-0.5 bg-amber-950 text-amber-400 text-[10px] font-bold rounded-full border border-amber-800">自用</span>}
+                              {!sale.shipped && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800">未出貨</span>}
+                            </div>
+                            <p className="text-zinc-100 font-medium text-sm leading-snug break-words">{itemSummary || "（無品項）"}</p>
+                            {sale.buyer_note && <p className="text-zinc-500 text-xs mt-0.5">{sale.buyer_note}</p>}
                           </div>
-                          <p className="text-zinc-100 font-medium text-sm leading-snug break-words">{itemSummary || "（無品項）"}</p>
-                          {sale.buyer_note && <p className="text-zinc-500 text-xs mt-0.5">{sale.buyer_note}</p>}
                         </div>
                         <div className="flex gap-1 shrink-0">
                           <button onClick={() => { setSaleModal(sale); setShowSaleModal(true); }} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition"><Pencil size={13} className="text-zinc-400" /></button>
@@ -1464,11 +1482,13 @@ function AccessoriesPage({ accessories, accSales, packaging, onAccUpdate, onDele
                         <div><span className="text-zinc-500 block">獲利</span>{selfUse ? <span className="text-amber-400">自用</span> : <span className={`font-bold ${profit >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{profit >= 0 ? "+" : ""}{fmt(profit, 1)}</span>}</div>
                       </div>
                     </div>
-                    <div className="hidden lg:grid grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 items-center">
+                    <div className="hidden lg:grid grid-cols-[auto_minmax(0,2fr)_1fr_1fr_1fr_auto] gap-4 items-center">
+                      <input type="checkbox" checked={!!sale.shipped} onChange={() => toggleShipped(sale)} title="已出貨" className="w-4 h-4 accent-emerald-500" />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           {dateLabel && <span className="text-teal-500 text-xs font-mono">{dateLabel}</span>}
                           {selfUse && <span className="px-1.5 py-0.5 bg-amber-950 text-amber-400 text-[10px] font-bold rounded-full border border-amber-800">自用</span>}
+                          {!sale.shipped && <span className="px-1.5 py-0.5 bg-rose-950 text-rose-400 text-[10px] font-bold rounded-full border border-rose-800">未出貨</span>}
                         </div>
                         <p className="text-zinc-100 text-sm font-medium truncate">{itemSummary || "（無品項）"}</p>
                         {sale.buyer_note && <p className="text-zinc-500 text-xs truncate mt-0.5">{sale.buyer_note}</p>}
